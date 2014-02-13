@@ -31,7 +31,7 @@ GSS_YEARS = [1972, 1973, 1974, 1975, 1976, 1977, 1978,
 
 
 # LOAD FILES ########################################################################
-'''
+
 sys.path.append('../Code/')
 from articleClass import *
 pathToData = '../Data/'
@@ -52,7 +52,7 @@ data = srw.SavReader(pathToData + GSSFilename)
 df = pd.DataFrame(data.all(), index=data[:,0], columns=ALL_VARIABLE_NAMES)
 with data:  # this makes sure the file will be closed, memory cleaned up after the program is run
 data = np.array(data.all()) # this makes sure the entire dataset is loaded into RAM, which makes accessing much faster
-'''
+
 
 from collections import defaultdict
 output = defaultdict(dict)

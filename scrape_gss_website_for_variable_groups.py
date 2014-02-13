@@ -138,9 +138,11 @@ def parseTree(address, level):
                 currentDict[parseTree(absolutePath + leaf['href'], level)] = None # this should return the variable name
             
             else:
-                currentDict[leaf.text.lower()] = parseTree(absolutePath + leaf['href'], level=level+1)                
+                currentDict[leaf.text.lower()] = parseTree(absolutePath + leaf['href'], level=level+1) # this sometimes returns the variable name!?                
         
         return currentDict
+
+
 
 for letter in indexsoup.find_all('a'): # for each letter
     #letterPage = bs(urllib2.urlopen(absolutePath + letter['href']).read()) # page for that letter
