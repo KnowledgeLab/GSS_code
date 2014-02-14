@@ -12,6 +12,8 @@ description:
    
      1. gss_central_variable field must be == 'Yes'
      2. no information on GSS years used in the article
+     3. make sure the stated GSS years the article used actually contain the variables
+         the article allegedly used
 
 - the other filter criteria are performed by filterArticleClasses.py    
  
@@ -61,7 +63,7 @@ for article in VARS_IN_ARTICLE: # for each article for which we have information
     # 2 conditions in IF statement because need to make sure we have a record for this
     # article first, and then see what the record says
     if article not in GSS_CENTRAL_VARIABLE or not GSS_CENTRAL_VARIABLE[article]:continue
-     
+    
     # check whether have all variable types for the article 
     IVs =  map(str.upper, VARS_IN_ARTICLE[article]['ivs'])
     DVs =  map(str.upper,VARS_IN_ARTICLE[article]['dvs'])
@@ -75,6 +77,11 @@ for article in VARS_IN_ARTICLE: # for each article for which we have information
         if set(IVs + DVs + controls).issubset(VARS_BY_YEAR[availableYear]):  
             newGSSYears.append(availableYear)
      
+    # check to make SURE that the GSS years the article allegedly used contain all the VARIABLES
+    # the article allegedly used
+    oldGSSYears = [year for year in oldGSSYears if set(IVs + DVs + controls).issubset(VARS_BY_YEAR[year])]   
+    if len(oldGSSYears) == 0: skip = True # if no years used are left, skip
+
     currentArticle = articleClass(article, IVs, DVs, controls, centralIVs, oldGSSYears, newGSSYears)
     articleClasses.append(currentArticle)
 

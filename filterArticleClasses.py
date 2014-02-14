@@ -15,50 +15,40 @@ returns: list of articleClasses that have passed the filters
 
 
 """
-import sys
-sys.path.append('../Code/')
-from articleClass import *
 
-
-def filterArticleClasses(oldGSSYearsLegit=True, newGSSYears=True, noIVs=True, noDVs=True, centralIV=False):
+def filterArticles(articleClasses, newGSSYears=True, noIVs=True, noDVs=True, centralIVs=False):
     '''
     This function filters the articleClasses list according to the following criteria.
     arguments:
      - noIVs: skip if no IVs specified
      - noDVs: skip if no DVs specified
-     - oldGSSYearsLegit: confirm that the GSS years which the article allegedly used actually include
-             the variables the article allegedly used
      - newGSSYears: skip if there are no GSS years possible besides the ones the article used
      - centralIV: skip if there is no IV(s) designated as "central"
     '''
     indicesToKeep = []
-    
+        
     for ind, article in enumerate(articleClasses):
-
+        
+        a = article # to make referencing its elements shorter
+        
         skip = False # this is the flag that determines whether the article fails to meet
                     # some criterion
-
-        if oldGSSYearsLegit:    
-        # check to make SURE that the GSS years the article allegedly used contain all the VARIABLES
-        # the article allegedly used
-            oldGSSYears = [year for year in oldGSSYears if set(IVs + DVs + controls).issubset(VARS_BY_YEAR[year])]   
-            if len(oldGSSYears) == 0: skip = True # if no years used are left, skip
     	
         # skip article if there is no info on DVs or IVs
         # Should we change this to skip only if BOTH controls AND IVs are not there?
         if noDVs and not skip:
-            if len(DVs) < 1: skip=True
+            if len(a.DVs) < 1: skip=True
         
         if noIVs and not skip: 
-            if len(IVs) < 1: skip=True
+            if len(a.IVs) < 1: skip=True
 
         if newGSSYears and not skip:         
             # if there is no un-used years of GSS possible to run the data on, then just skip this article
-            if len(newGSSYears) < 1: skip=True
+            if len(a.GSSYearsPossible) < 1: skip=True
             
         if centralIVs and not skip:    
             # if GSS is not the central dataset used then skip
-            if len(centralIVs) < 1: skip=True
+            if len(a.centralIVs) < 1: skip=True
                    
         # if the article survived all of the checks above add it to the list
         if not skip: indicesToKeep.append(ind)

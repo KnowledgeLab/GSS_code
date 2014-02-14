@@ -34,6 +34,7 @@ GSS_YEARS = [1972, 1973, 1974, 1975, 1976, 1977, 1978,
 
 sys.path.append('../Code/')
 from articleClass import *
+from filterArticleClasses import filterArticles 
 pathToData = '../Data/'
 ALL_VARIABLE_NAMES = cp.load(open(pathToData + 'ALL_VARIABLE_NAMES.pickle'))
 ALL_VARIABLE_NAMES = [str.upper(el) for el in ALL_VARIABLE_NAMES]
@@ -45,14 +46,16 @@ VARS_BY_YEAR = cp.load(open(pathToData + 'VARS_BY_YEAR.pickle'))
 YEAR_INDICES = cp.load(open(pathToData + 'YEAR_INDICES.pickle'))
 VAR_INDICES = cp.load(open(pathToData + 'VAR_INDICES_binary.pickle', 'rb'))
 articleClasses = cp.load(open(pathToData + 'articleClasses.pickle', 'rb'))
+articleClasses = filterArticles(articleClasses)
 
+''' 
 # load GSS data
 GSSFilename = 'GSS Dataset/GSS7212_R2.sav'
 data = srw.SavReader(pathToData + GSSFilename)
 df = pd.DataFrame(data.all(), index=data[:,0], columns=ALL_VARIABLE_NAMES)
 with data:  # this makes sure the file will be closed, memory cleaned up after the program is run
-data = np.array(data.all()) # this makes sure the entire dataset is loaded into RAM, which makes accessing much faster
-
+    data = np.array(data.all()) # this makes sure the entire dataset is loaded into RAM, which makes accessing much faster
+'''
 
 from collections import defaultdict
 output = defaultdict(dict)
@@ -72,7 +75,7 @@ print 'len of articleClasses:', len(articleClasses)
 
 
 # begin estimating models   
-for article in random.sample(articleClasses, 200):
+for article in random.sample(articleClasses, 20):
 #for article in articleClasses:
 #for article in [a for a in articleClasses if a.articleID == 4454]:
 

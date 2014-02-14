@@ -20,7 +20,9 @@ def parseTree(currentDict):
     # if all values are unicode (the variable names)
     if np.array([type(el)==unicode for el in currentDict.values()]).all():
         currVarGroup = set(currentDict.values())
-        for v in currVarGroup:            
+        for v in currVarGroup:
+            v = v.upper()
+            currVarGroup = set(map(unicode.upper, currVarGroup))            
             varGroups[v].update(currVarGroup - set([v])) # convert everything to uppercase
 
     else:    
@@ -49,4 +51,7 @@ if __name__ == "__main__":
             continue
         else: parseTree(rawTree[letter])    
     
-#    cp.dump(varGroups, open(pathToData + 'dictOfVariableGroups.pickle', 'w'))
+    # get rid of situations where {variable : empty set}. There are ~30 cases like this.
+    varGroups = dict([(k, v) for k, v in varGroups.iteritems() if len(v) > 0])    
+    
+    cp.dump(varGroups, open(pathToData + 'dictOfVariableGroups.pickle', 'wb'))
