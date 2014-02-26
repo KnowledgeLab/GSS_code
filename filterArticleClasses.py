@@ -16,7 +16,7 @@ returns: list of articleClasses that have passed the filters
 
 """
 
-def filterArticles(articleClasses, newGSSYears=True, noIVs=True, noDVs=True, centralIVs=False):
+def filterArticles(articleClasses, GSSYearsUsed=True, GSSYearsPossible=True, noIVs=True, noDVs=True, centralIVs=False):
     '''
     This function filters the articleClasses list according to the following criteria.
     arguments:
@@ -42,7 +42,11 @@ def filterArticles(articleClasses, newGSSYears=True, noIVs=True, noDVs=True, cen
         if noIVs and not skip: 
             if len(a.IVs) < 1: skip=True
 
-        if newGSSYears and not skip:         
+        if GSSYearsUsed and not skip:         
+            # if there is no un-used years of GSS possible to run the data on, then just skip this article
+            if len(a.GSSYearsUsed) < 1: skip=True
+            
+        if GSSYearsPossible and not skip:         
             # if there is no un-used years of GSS possible to run the data on, then just skip this article
             if len(a.GSSYearsPossible) < 1: skip=True
             

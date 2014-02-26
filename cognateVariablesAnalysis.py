@@ -22,6 +22,7 @@ import statsmodels.formula.api as smf
 import random, sys
 from scipy.stats import pearsonr, ttest_ind, ttest_rel
 from random import choice
+import time
 
 # global variables
 # i am taking out year 1984 for now because i don't have variables data on it! need to log in to commander.uchicago.edu
@@ -44,7 +45,7 @@ MISSING_VALUES_DICT = cp.load(open(pathToData + 'MISSING_VALUES_DICT.pickle', 'r
 MEASURE_LEVELS = cp.load(open(pathToData + 'MEASURE_LEVELS.pickle'))
 articleIDAndGSSYearsUsed = cp.load(open(pathToData + 'articleIDAndGssYearsUsed-cleaned.pickle')) # load the years used
 VARS_BY_YEAR = cp.load(open(pathToData + 'VARS_BY_YEAR.pickle'))
-# structure of the dictionary above: { year (int) : [ set of variable names (strs), [variable_i, metadata_i] ] } 
+# structure of the dictionary above: { year (int) : set of variable names (strs) } 
 YEAR_INDICES = cp.load(open(pathToData + 'YEAR_INDICES.pickle'))
 VAR_INDICES = cp.load(open(pathToData + 'VAR_INDICES_binary.pickle', 'rb'))
 articleClasses = cp.load(open(pathToData + 'articleClasses.pickle', 'rb'))
@@ -60,7 +61,6 @@ with data:  # this makes sure the file will be closed, memory cleaned up after t
 
 from collections import defaultdict
 
-
 allPropsForYearsUsed = []
 allPropsForYearsPossible =[]
 allParamSizesForYearsUsed = []
@@ -69,25 +69,48 @@ allRsForYearsUsed, allRsForYearsPossible = [], []
 
 print 'len of articleClasses:', len(articleClasses)
 
-def runModel(year, DV, IVs):
-      
-    design = df.loc[year, [DV] + IVs].copy(deep=True)  # Need to make a deep copy so that original df isn't changed
-
-    # MISSING VALUES
-    for col in design.columns:
+def removeMissingValues(dataMat, axis=0):
+    '''
+    Description: Goes through each column in DataFrame and replaces its missing values with np.nan.
+    if axis=0:  gets rid of all rows that have at least one missing value.
+    if axis=1: gets rid of all columns that are entirely np.nan
+    
+    Inputs: DataFrame
+    Output: DataFrame with any rows with at least one missing value removed.
+    '''
+    
+    for col in dataMat.columns:
+        
         mv = MISSING_VALUES_DICT[col]
+
         # if discrete missing values, replace them with np.nan
         if 'values' in mv:
-            design[col].replace(mv['values'], [np.nan]*len(mv['values']), inplace=True) # it's important to have inPlace=True            
+            dataMat[col].replace(mv['values'], [np.nan]*len(mv['values']), inplace=True) # it's important to have inPlace=True            
+
         # if range of missing values [lower, upper] is given
         elif 'lower' in mv:
-            design[col][np.array(design[col] > mv['lower']) * np.array(design[col] < mv['upper'])] = np.nan                   
+            dataMat[col][np.array(dataMat[col] > mv['lower']) * np.array(dataMat[col] < mv['upper'])] = np.nan                   
             # if there is a range, there is also always (?) a discrete value designated as missing
             if 'value' in mv:
-                design[col].replace(mv['value'], np.nan, inplace=True) # it's important to have inPlace=True                        
-    design = design.dropna(axis=0) # drop all rows with any missing values (np.nan)        
+                dataMat[col].replace(mv['value'], np.nan, inplace=True) # it's important to have inPlace=True                        
 
-
+    if axis==0: return dataMat.dropna(axis=0) # drop all rows with any missing values (np.nan)        
+    if axis==1: return dataMat.dropna(axis=1, how='all')
+    
+def runModel(year, DV, IVs, controls=[]):
+    '''
+    inputs:
+      - the year of GSS to use
+      - Dependent Variable (just 1)
+      - list of independent and control variables
+      
+    outputs:
+      If OLS model estimation was possibely, return results data structure from statsmodels OLS. results contains methods like .summary() and .pvalues
+      else: return None 
+    '''
+    design = df.loc[year, [DV] + IVs + controls].copy(deep=True)  # Need to make a deep copy so that original df isn't changed
+    design = removeMissingValues(design)
+    
     # remove columns that are constant; if DV is constant, skip to next model
     # this needs to come after the step above because some columns will be constant
     # only after all the missing value-rows are removed
@@ -103,38 +126,29 @@ def runModel(year, DV, IVs):
         return None
         
     # skip if there's not enough data after deleting rows
-    # PROBLEM: dummy-ing categorical variables produces many more columns,
-    # so the question is if there is enough data AFTER dummy-ing..
     if design.shape[0] < design.shape[1]: # if number of rows is less than number of columns
         print 'Not enough observations. Skipping...'
         return None
-    
-    '''
+       
     # create formula
-    formula = DV + ' ~ ' 
+    formula = 'standardize('+ DV +', ddof=1) ~ ' 
     for col in design.columns[1:]: # don't include the DV in the RHS!
-        if MEASURE_LEVELS[col] == 'ratio': formula += 'center('+ col + ')'  # only center() if it's a ratio?
-        else: formula += ' C(' + col + ')' # i shouldn't center() this?
-        formula += ' + '
-    formula = formula[:-2] 
-    '''
-    
-    # create formula
-    formula = DV + ' ~ ' 
-    for col in design.columns[1:]: # don't include the DV in the RHS!
-        formula += 'standardize('+ col + ', ddof=1) + '  # normalize the coefficients?
+        formula += 'standardize('+ col + ', ddof=1) + '  # normalize the coefficients. ddof=1 calculates typical sd, while ddof=0 does MLE 
     formula = formula[:-2] # remove the last plus sign
 
     # calculate the results                                          
     results= smf.ols(formula, data=design, missing='drop').fit() # do I need the missing='drop' part?
 
     # QUALITY CHECK!!!: a check on abnormal results
-    if (abs(results.params) > 10000).any() or results.rsquared > 0.98:
+    if (abs(results.params) > 5).any() or results.rsquared > 0.98:
         print 'Either the  params or the R^2 is too high. Skipping.'
-        print year, article.articleID
-        print formula
+        return None
         # raise <--- NEED TO THINK THROUGH WHAT TO DO HERE...
-        # this has happened becaseuse the formula had 'DENOM ~ DENOM16', and correlation was 1.0                
+        # Reasons this case may come up:
+        # 1. The formula has very related variables in it: 'DENOM ~ DENOM16', and correlation was 1.0                
+        # 2. The variation in DV is huge ('OTHER' [religious affiliation] or 'OCC' [occupational status]) while 
+        # variation in IV is much smaller. Wait, I should standardize DV too??? Tryingt this now.
+
     if np.isnan(results.params).any():
         raise                
 
@@ -152,22 +166,19 @@ if __name__ == "__main__":
         for outcome in outcomes:
             output[group][outcome] = []
             
-    articleClasses = filterArticles(articleClasses, newGSSYears=False, centralIVs=True)            
-    for article in random.sample(articleClasses, 200):
-    #for article in articleClasses:
-    #for article in [a for a in articleClasses if a.articleID == 4454]:
+    articleClasses = filterArticles(articleClasses, GSSYearsUsed=True, GSSYearsPossible=False, centralIVs=True)            
+    for article in random.sample(articleClasses, 400):
+#    for article in articleClasses:
+#    for article in [a for a in articleClasses if a.articleID == 6197]:
     
         print 'Processing article:', article.articleID
 
         # check to see if there are any cognate variables for the central IVs. if not, skip.
-        if not len(set(article.centralIVs).intersection(dictOfVariableGroups)):
+        cIVsWithCognates = set(article.centralIVs).intersection(set(dictOfVariableGroups) - set(['EDUC', 'DEGREE']))        
+        if not len(cIVsWithCognates):
             print 'No cognates for the specified central IVs'            
             continue
-        
-        if len(article.GSSYearsUsed) < 1: 
-            print 'No GSS Years Used'
-            continue
-        
+              
         # define the outcomes I'm interseted in for the two groups          
         td = defaultdict(dict)
         for group in groups:             
@@ -180,45 +191,51 @@ if __name__ == "__main__":
             td[group]['adjRs'] = []
             td[group]['pvalues'] = []
 
-              
+        # RUN MODELS FROM GROUP 2 #############################################      
         # group 2
         group = 'group2'
         
-        # figure out which of the central IVs actually has cognates                
-        notFound=True
-        i=0                
-        cognate=False
-        while notFound and i < len(article.centralIVs):
-            cIV = article.centralIVs[i]
-            if cIV in dictOfVariableGroups:                
-                for potCog in dictOfVariableGroups[cIV]:
-                    # if the centralIV and cognate are correlated highly, then
-                    
-                    print 'trying', potCog, 'in place of', cIV
-                    
-                    cIVs = reduce(pd.Series.append, [df.loc[yr, cIV] for yr in article.GSSYearsUsed])
-                    potCogs = reduce(pd.Series.append, [df.loc[yr, potCog] for yr in article.GSSYearsUsed])
+        # figure out which of the central IVs actually has cognates.
+        # and choose the one that correlates most highly                
+        cIVCogPairs = {}
+                
+        for cIV in cIVsWithCognates:
+            potCogsMat = reduce(pd.DataFrame.append, [df.loc[yr, [cIV] + list(dictOfVariableGroups[cIV])] for yr in article.GSSYearsUsed])
+            print potCogsMat.shape
 
-                    if pearsonr(cIVs, potCogs)[0] > 0.7:
-                        cognate = potCog
-                        notFound=False
-                        break
-            i+=1
-        
-        # if don't find a suitable cognate, skip this article
-        if not cognate: 
+            # some columsn will be all np.nan, because those cognates won't be in the appropriate GSS datasets
+            # get rid of those columns
+            potCogsMat = removeMissingValues(potCogsMat, axis=1)
+            # now get rid of any ROWS with missing values            
+            potCogsMat = removeMissingValues(potCogsMat, axis=0)
+                
+            maxCorr = (None, 0.0) # first value is name of variable, second is current max
+            for potCog in set(potCogsMat)-set([cIV]):
+                currCorr = pearsonr(potCogsMat[cIV], potCogsMat[potCog])[0]             
+                if currCorr > maxCorr[1]:
+                    maxCorr = (potCog, currCorr)
+                    
+            #Check to see that the potential cognate is not already in the articles' variables, 
+            # and that it correlates highly enough
+            if maxCorr[0] not in article.IVs + article.controls and maxCorr[1] > 0.5: 
+                print 'Possibility:', maxCorr[0], 'in place of', cIV, '. Correlation is', maxCorr[1]
+                cIVCogPairs[cIV] = maxCorr[0]
+                         
+        if not cIVCogPairs:  # if there is nothing in this dict 
             print 'Could not find suitable cognate. Skipping.'
             continue
-
+        
+        cIV, cognate = random.choice(cIVCogPairs.items())
+        LHS = article.IVs + article.controls
+        LHS.remove(cIV)
+        LHS.append(cognate) # need to put it in list otherwise it treats each letter as an element
+        print 'Substituting', cIV, 'with cognate', cognate
+        raw_input('Press Enter')
+        
+        # Now let's estimate the models
         for year in article.GSSYearsUsed:
             for DV in article.DVs:
-                # need to make sure the formula doens't already contain the cognate!!!
-            
-                #build the list of predictor variables
-                print 'Substituting', cIV, 'with cognate', cognate
-                LHS = set(article.IVs + article.controls) - set([cIV])
-                LHS = list(LHS.union([cognate])) # need to put it in list otherwise it treats each letter as an element
-
+                
                 results = runModel(year, DV, LHS)          
                 if not results: continue # results will be None if the formula cant be estimated
                     
@@ -227,15 +244,26 @@ if __name__ == "__main__":
                 td[group]['adjRs'].append(results.rsquared_adj)
                 td[group]['numTotal'] += len(results.params[1:])
                 td[group]['numSig'] += float(len([p for p in results.pvalues[1:] if p < 0.05])) # start at 1 because don't want to count the constant
-                td[group]['paramSizesNormed'].append(results.params[1:].abs().mean()) # get the absolute value of the standardized coefficients and take the mean 
-                td[group]['pvalues'].append(results.pvalues[1:].mean())
-  
+#                td[group]['paramSizesNormed'].append(results.params[1:].abs().mean()) # get the absolute value of the standardized coefficients and take the mean 
+#                td[group]['pvalues'].append(results.pvalues[1:].mean())
+                # the lines above record the parameter sizes and p-values of all variables. 
+                # the lines below record info only for the substituted variables, which should be last
+                td[group]['paramSizesNormed'].append(abs(results.params[-1])) # get the absolute value of the standardized coefficients and take the mean 
+                td[group]['pvalues'].append(results.pvalues[-1])
+
+        # RUN MODELS FROM GROUP 1 ############################################  
         # group 1
-        # runModel(year, DV, IVs )
         group = 'group1'
+
+        LHS.remove(cognate)
+        LHS.append(cIV)
+
         for year in article.GSSYearsUsed:
             for DV in article.DVs:        
-                results = runModel(year, DV, article.IVs + article.controls)          
+
+                results = runModel(year, DV, LHS)          
+
+#                results = runModel(year, DV, article.IVs, article.controls)          
                 if not results: continue # results will be None if the formula cant be estimated
             
                 print 'Year used: ', year
@@ -243,20 +271,13 @@ if __name__ == "__main__":
                 td[group]['adjRs'].append(results.rsquared_adj)
                 td[group]['numTotal'] += len(results.params[1:])
                 td[group]['numSig'] += float(len([p for p in results.pvalues[1:] if p < 0.05])) # start at 1 because don't want to count the constant
-                td[group]['paramSizesNormed'].append(results.params[1:].abs().mean()) # get the absolute value of the standardized coefficients and take the mean 
-                td[group]['pvalues'].append(results.pvalues[1:].mean())
+#                td[group]['paramSizesNormed'].append(results.params[1:].abs().mean()) # get the absolute value of the standardized coefficients and take the mean 
+#                td[group]['pvalues'].append(results.pvalues[1:].mean())
+                #Below I want to record the info only for the variables I replaced earlier with cognates
+                td[group]['paramSizesNormed'].append(abs(results.params[-1])) # get the absolute value of the standardized coefficients and take the mean 
+                td[group]['pvalues'].append(results.pvalues[-1])
          
-       
-       
-               
-                # should need the 2nd condition here because i limited GSSYearsUsed above..
-    #            elif year in article.GSSYearsPossible and year < max(article.GSSYearsUsed): # the GSS year the models were run on is a "new" year, (wasn't used in article)      
-    #                    for iv in article.centralIVs:
-    #                       if iv in col:
-    #                    coeffsTotalForYearsPossible += 1             
-                    
-                    
-                
+                     
         # if an article's model isn't run on both UNUSED EARLY YEARS and USED years, then skip it        
         if td['group1']['numTotal'] == 0 or td['group2']['numTotal'] == 0: continue
       
@@ -266,13 +287,11 @@ if __name__ == "__main__":
             output[group]['propSig'].append( td[group]['numSig']/td[group]['numTotal']) 
             output[group]['paramSizesNormed'].append(np.mean( td[group]['paramSizesNormed'])) 
             output[group]['pvalues'].append(np.mean( td[group]['pvalues']))
-            output[group]['numTotal'].append(td[group]['numTotal'] / len(td[group]['Rs'])) #divide by len of R^2 array to get a mean of variables estimated PER model 
-                          
+            output[group]['numTotal'].append(td[group]['numTotal'] / len(td[group]['Rs'])) #divide by len of R^2 array to get a mean of variables estimated PER model                           
     
     
     print 'TTests'
     for outcome in outcomes:
-        if outcome == 'paramSizes': continue
         print 'Means of group1 and group2:', np.mean(output['group1'][outcome]), np.mean(output['group2'][outcome]), 'Paired T-test of ' + outcome, ttest_rel(output['group1'][outcome], output['group2'][outcome])
 
     # should i put a delete command for data here?
