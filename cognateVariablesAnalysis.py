@@ -153,6 +153,70 @@ def runModel(year, DV, IVs, controls=[]):
         raise                
 
     return results
+
+    
+    
+def identifyCognates(LHS, cIVs, GSSYearsUsed):
+    '''
+    This function takes as input the variables the articles uses on the LHS, identifies suitable
+    cognate variables and returns one of them, along with the suitable GSS years that have that cognate.
+    GSS years to use are that subset of GSSYearsUsed which also contain the cognate
+    
+    inputs:
+    
+     LHS: list of IVs and control variables
+     cIVs: list of "central" IVs
+     GSSYearsUsed = Years the article actually used
+     
+    returns:
+     None: if suitable cognates and years were not found
+     (cIV, cognate, GSS years to use)        
+    '''
+    # check to see if there are any cognate variables for the central IVs. if not, skip.
+    cIVsWithCognates = set(cIVs).intersection(set(dictOfVariableGroups) - set(['EDUC', 'DEGREE']))        
+    if not len(cIVsWithCognates):
+        print 'No cognates for the specified central IVs'            
+        return None
+    
+    # figure out which of the central IVs actually has cognates.
+    # and choose the one that correlates most highly                
+    cIVCogPairs = {}
+            
+    for cIV in cIVsWithCognates:
+
+        potCogsMat = reduce(pd.DataFrame.append, [df.loc[yr, [cIV] + list(dictOfVariableGroups[cIV])] for yr in GSSYearsUsed])
+        print potCogsMat.shape
+
+        # some columsn will be all np.nan, because those cognates won't be in the appropriate GSS datasets
+        # get rid of those columns
+        potCogsMat = removeMissingValues(potCogsMat, axis=1) # this replaces ALL miss.values with np.NaN, even
+                                                            # though it only removes along axis=1
+           
+        # first value is name of variable, second is current max, third is possible years   
+        maxCorr = (None, 0.0, []) 
+        for potCog in set(potCogsMat)-set([cIV]):
+            # The step below is important. I am reducing my matrix down to just two columns, cIV and potCog
+            # and removing the missing values from those (not the full matrix of cognates)            
+            subPotCogsMat = potCogsMat[[cIV, potCog]].dropna(axis=0)
+            currCorr = pearsonr(subPotCogsMat[cIV], subPotCogsMat[potCog])[0]             
+            if currCorr > maxCorr[1]:
+                # last value gives possibleYears (i.e. all unique row labels after missing values were removed)
+                maxCorr = (potCog, currCorr, subPotCogsMat.index.unique()) 
+                
+        #Check to see that the potential cognate is not already in the articles' variables, 
+        # and that it correlates highly enough
+        if maxCorr[0] not in LHS and maxCorr[1] > 0.5: 
+            print 'Possibility:', maxCorr[0], 'in place of', cIV, '. Correlation is', maxCorr[1]
+            cIVCogPairs[cIV] = (maxCorr[0], maxCorr[2])
+                     
+    if not cIVCogPairs:  # if there is nothing in this dict 
+        print 'Could not find suitable cognate. Skipping.'
+        return None
+    
+    else:
+        # of the cognate variable options, choose a random one
+        cIV, (cognate, GSSYearsWithCognate) = random.choice(cIVCogPairs.items())     
+        return cIV, cognate, GSSYearsWithCognate    
     
     
 ############################################################
@@ -172,12 +236,6 @@ if __name__ == "__main__":
 #    for article in [a for a in articleClasses if a.articleID == 6197]:
     
         print 'Processing article:', article.articleID
-
-        # check to see if there are any cognate variables for the central IVs. if not, skip.
-        cIVsWithCognates = set(article.centralIVs).intersection(set(dictOfVariableGroups) - set(['EDUC', 'DEGREE']))        
-        if not len(cIVsWithCognates):
-            print 'No cognates for the specified central IVs'            
-            continue
               
         # define the outcomes I'm interseted in for the two groups          
         td = defaultdict(dict)
@@ -194,49 +252,26 @@ if __name__ == "__main__":
         # RUN MODELS FROM GROUP 2 #############################################      
         # group 2
         group = 'group2'
-        
-        # figure out which of the central IVs actually has cognates.
-        # and choose the one that correlates most highly                
-        cIVCogPairs = {}
-                
-        for cIV in cIVsWithCognates:
-            potCogsMat = reduce(pd.DataFrame.append, [df.loc[yr, [cIV] + list(dictOfVariableGroups[cIV])] for yr in article.GSSYearsUsed])
-            print potCogsMat.shape
 
-            # some columsn will be all np.nan, because those cognates won't be in the appropriate GSS datasets
-            # get rid of those columns
-            potCogsMat = removeMissingValues(potCogsMat, axis=1)
-            # now get rid of any ROWS with missing values            
-            potCogsMat = removeMissingValues(potCogsMat, axis=0)
-                
-            maxCorr = (None, 0.0) # first value is name of variable, second is current max
-            for potCog in set(potCogsMat)-set([cIV]):
-                currCorr = pearsonr(potCogsMat[cIV], potCogsMat[potCog])[0]             
-                if currCorr > maxCorr[1]:
-                    maxCorr = (potCog, currCorr)
-                    
-            #Check to see that the potential cognate is not already in the articles' variables, 
-            # and that it correlates highly enough
-            if maxCorr[0] not in article.IVs + article.controls and maxCorr[1] > 0.5: 
-                print 'Possibility:', maxCorr[0], 'in place of', cIV, '. Correlation is', maxCorr[1]
-                cIVCogPairs[cIV] = maxCorr[0]
-                         
-        if not cIVCogPairs:  # if there is nothing in this dict 
-            print 'Could not find suitable cognate. Skipping.'
-            continue
-        
-        cIV, cognate = random.choice(cIVCogPairs.items())
-        LHS = article.IVs + article.controls
-        LHS.remove(cIV)
-        LHS.append(cognate) # need to put it in list otherwise it treats each letter as an element
+        originalLHS = article.IVs + article.controls
+        identifyCognatesReturns = identifyCognates(originalLHS, article.centralIVs, article.GSSYearsUsed)        
+        if not identifyCognatesReturns: 
+            print 'No suitable cognates. Skipping.'            
+            continue        
+        else: 
+            cIV, cognate, GSSYearsWithCognate = identifyCognatesReturns
+            
+        cognateLHS = originalLHS[:]
+        cognateLHS.remove(cIV)
+        cognateLHS.append(cognate) # need to put it in list otherwise it treats each letter as an element
         print 'Substituting', cIV, 'with cognate', cognate
-        raw_input('Press Enter')
+        #raw_input('Press Enter')
         
         # Now let's estimate the models
-        for year in article.GSSYearsUsed:
+        for year in GSSYearsWithCognate:
             for DV in article.DVs:
                 
-                results = runModel(year, DV, LHS)          
+                results = runModel(year, DV, cognateLHS)          
                 if not results: continue # results will be None if the formula cant be estimated
                     
                 print 'Year used: ', year
@@ -255,13 +290,14 @@ if __name__ == "__main__":
         # group 1
         group = 'group1'
 
-        LHS.remove(cognate)
-        LHS.append(cIV)
-
-        for year in article.GSSYearsUsed:
+        # make sure cIV is last in the list of variables
+        originalLHS.remove(cIV)
+        originalLHS.append(cIV) 
+        
+        for year in GSSYearsWithCognate:
             for DV in article.DVs:        
 
-                results = runModel(year, DV, LHS)          
+                results = runModel(year, DV, originalLHS)          
 
 #                results = runModel(year, DV, article.IVs, article.controls)          
                 if not results: continue # results will be None if the formula cant be estimated
