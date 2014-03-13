@@ -34,6 +34,7 @@ GSS_YEARS = [1972, 1973, 1974, 1975, 1976, 1977, 1978,
 
 
 # LOAD FILES ########################################################################
+
 '''
 sys.path.append('../Code/')
 from articleClass import *
@@ -50,8 +51,7 @@ YEAR_INDICES = cp.load(open(pathToData + 'YEAR_INDICES.pickle'))
 VAR_INDICES = cp.load(open(pathToData + 'VAR_INDICES_binary.pickle', 'rb'))
 articleClasses = cp.load(open(pathToData + 'articleClasses.pickle', 'rb'))
 dictOfVariableGroups = cp.load(open(pathToData + 'dictOfVariableGroups.pickle'))
-'''
-''' 
+
 # load GSS data
 GSSFilename = 'GSS Dataset/GSS7212_R2.sav'
 data = srw.SavReader(pathToData + GSSFilename)
@@ -97,6 +97,25 @@ def removeMissingValues(dataMat, axis=0):
 
     if axis==0: return dataMat.dropna(axis=0) # drop all rows with any missing values (np.nan)        
     if axis==1: return dataMat.dropna(axis=1, how='all')
+
+def removeConstantColumns(design):
+    '''
+    Takes a Pandas DataFrame, searches for all columns that are constant, and drops them.
+      - if DV (first column) is constant, return None
+      - this function should be called only after all the missing value-rows are removed
+
+    input: dataframe
+    returns: dataframe without any constant columns; if DV is constant returns None
+    '''
+    if len(design.ix[:,0].unique()) == 1: return None # if DV constant
+    for col in design:
+        if len(design[col].unique()) == 1: # if any IVs or controls constant, drop 'em
+            print 'Dropping column', col, 'because it is constant'                    
+            #raw_input('asdfa')            
+            design = design.drop(col, axis=1) # inplace=True option not available because i'm using an old Pandas package?
+            print design.columns
+    
+    return design
     
 def runModel(year, DV, IVs, controls=[]):
     '''
@@ -110,18 +129,13 @@ def runModel(year, DV, IVs, controls=[]):
       else: return None 
     '''
     design = df.loc[year, [DV] + IVs + controls].copy(deep=True)  # Need to make a deep copy so that original df isn't changed
-    design = removeMissingValues(design)
-    
-    # remove columns that are constant; if DV is constant, skip to next model
-    # this needs to come after the step above because some columns will be constant
-    # only after all the missing value-rows are removed
-    if len(design[DV].unique()) == 1: return None # if DV constant
-    for col in design.columns:
-        if len(design[col].unique()) == 1: # if any IVs or controls constant, drop 'em
-            print 'Dropping column', col, 'because it is constant'                    
-            design = design.drop(col, axis=1) # inplace=True option not available because i'm using an old Pandas package?
-    
-    #need to make sure there are still IVs left after we dropped some above
+    design = removeMissingValues(design) # remove rows with missing observations
+    design = removeConstantColumns(design)    
+
+    # if line above removed DV, then can't use this model, return None
+    if not design: return None    
+
+    #need to make sure there are still IVs left after we dropped some above    
     if design.shape[1] < 2: 
         print 'no IVs available. Skipping.'
         return None
@@ -138,7 +152,7 @@ def runModel(year, DV, IVs, controls=[]):
     formula = formula[:-2] # remove the last plus sign
 
     # calculate the results                                          
-    results= smf.ols(formula, data=design, missing='drop').fit() # do I need the missing='drop' part?
+    results = smf.ols(formula, data=design, missing='drop').fit() # do I need the missing='drop' part?
 
     # QUALITY CHECK!!!: a check on abnormal results
     if (abs(results.params) > 5).any() or results.rsquared > 0.98:
@@ -157,7 +171,7 @@ def runModel(year, DV, IVs, controls=[]):
 
     
     
-def identifyCognates(LHS, cIVs, GSSYearsUsed):
+def identifyCognates(LHS, cIVs, GSSYearsUsed, corrThreshold):
     '''
     This function takes as input the variables the articles uses on the LHS, identifies suitable
     cognate variables and returns one of them, along with the suitable GSS years that have that cognate.
@@ -174,7 +188,7 @@ def identifyCognates(LHS, cIVs, GSSYearsUsed):
      (cIV, cognate, GSS years to use)        
     '''
     # check to see if there are any cognate variables for the central IVs. if not, skip.
-    cIVsWithCognates = set(cIVs).intersection(set(dictOfVariableGroups) - set(['EDUC', 'DEGREE']))        
+    cIVsWithCognates = set(cIVs).intersection(set(dictOfVariableGroups)) #- set(['EDUC', 'DEGREE']))        
     if not len(cIVsWithCognates):
         print 'No cognates for the specified central IVs'            
         return None
@@ -219,7 +233,9 @@ def identifyCognates(LHS, cIVs, GSSYearsUsed):
         for potCog in set(potCogsMat)-set([cIV]):        
             subPotCogsMat = potCogsMat[[cIV, potCog]].dropna(axis=0)
             currCorr = pearsonr(subPotCogsMat[cIV], subPotCogsMat[potCog])[0]             
-            if potCog not in LHS and currCorr > 0.5: 
+            
+            # the next line is very important. It sets the threshold for minimum             
+            if potCog not in LHS and currCorr > corrThreshold: 
                 cogsPossForCIV.append((potCog, subPotCogsMat.index.unique()))
         if cogsPossForCIV:
             cIVCogPairs[cIV] = random.choice(cogsPossForCIV)
@@ -237,6 +253,11 @@ def identifyCognates(LHS, cIVs, GSSYearsUsed):
 ############################################################
 if __name__ == "__main__":    
     
+    # contains for storing (variable, cognate) tuples in order to see what substitutions
+    #i'm most commonly making
+    from collections import Counter
+    variableCognateTuples = []
+    
     # define the storage containers for outputs
     output = defaultdict(dict)
     groups = ['group1', 'group2']
@@ -246,13 +267,14 @@ if __name__ == "__main__":
             output[group][outcome] = []
             
     articleClasses = filterArticles(articleClasses, GSSYearsUsed=True, GSSYearsPossible=False, centralIVs=True)            
-    for article in random.sample(articleClasses, 400):
-#    for article in articleClasses:
-#    for article in [a for a in articleClasses if a.articleID == 6197]:
+    for article in random.sample(articleClasses, 300):
+    #for article in articleClasses:
+    #for article in [a for a in articleClasses if a.articleID == 934]:
     
         print 'Processing article:', article.articleID
               
-        # define the outcomes I'm interseted in for the two groups. td = "temp data"   
+        # define the outcomes I'm interseted in for the two groups. td = "temp data" 
+        # and initialize them for both groups
         td = defaultdict(dict)
         for group in groups:             
             td[group]['numTotal'] = 0.0
@@ -264,65 +286,66 @@ if __name__ == "__main__":
             td[group]['adjRs'] = []
             td[group]['pvalues'] = []
 
-        # RUN MODELS FROM GROUP 2 #############################################      
-        # group 2
-        group = 'group2'
 
+        # let's see if this article is suitable for cognates analysis:
         originalLHS = article.IVs + article.controls
-        identifyCognatesReturns = identifyCognates(originalLHS, article.centralIVs, article.GSSYearsUsed)        
+        identifyCognatesReturns = identifyCognates(originalLHS, article.centralIVs, article.GSSYearsUsed, corrThreshold=0.8)        
         if not identifyCognatesReturns: 
             print 'No suitable cognates. Skipping.'            
             continue        
         else: 
             cIV, cognate, GSSYearsWithCognate = identifyCognatesReturns
-            
-        cognateLHS = originalLHS[:]
-        cognateLHS.remove(cIV)
-        cognateLHS.append(cognate) # need to put it in list otherwise it treats each letter as an element
-        print 'Substituting', cIV, 'with cognate', cognate
-        time.sleep(2)
-        #raw_input('Press Enter')
-        
-        # Now let's estimate the models
-        for DV in article.DVs:
-            for year in GSSYearsWithCognate:        
-                
-                #**********************
-                # here, put the originalLH calculation right below this one, average over years (?)
-                # and add them to the output container
 
-                results = runModel(year, DV, cognateLHS)          
-                if not results: continue # results will be None if the formula cant be estimated
-                    
-                print 'Year used: ', year
-                td[group]['Rs'].append(results.rsquared)
-                td[group]['adjRs'].append(results.rsquared_adj)
-                td[group]['numTotal'] += len(results.params[1:])
-                td[group]['numSig'] += float(len([p for p in results.pvalues[1:] if p < 0.05])) # start at 1 because don't want to count the constant
-#                td[group]['paramSizesNormed'].append(results.params[1:].abs().mean()) # get the absolute value of the standardized coefficients and take the mean 
-#                td[group]['pvalues'].append(results.pvalues[1:].mean())
+        # if we got this far, then this article does have suitable cognates, so let's estimate models       
+        # Now let's estimate the models
+        for DV in article.DVs:            
+            for year in GSSYearsWithCognate:        
+
+                # group 2 models (with cognates)
+                group = 'group2'
+                print 'Running cognate models'
+                
+                cognateLHS = originalLHS[:]
+                cognateLHS.remove(cIV)
+                cognateLHS.append(cognate) # need to put it in list otherwise it treats each letter as an element
+                print 'Substituting', cIV, 'with cognate', cognate
+                #time.sleep(2)
+                #raw_input('Press Enter')                
+                
+                resultsCognate = runModel(year, DV, cognateLHS)          
+                if not resultsCognate: continue # results will be None if the formula cant be estimated
+                print DV, '~', cognateLHS, 'on year', year
+                 
+                # save the results                   
+                td[group]['Rs'].append(resultsCognate.rsquared)
+                td[group]['adjRs'].append(resultsCognate.rsquared_adj)
+                td[group]['numTotal'] += len(resultsCognate.params[1:])
+                td[group]['numSig'] += float(len([p for p in resultsCognate.pvalues[1:] if p < 0.05])) # start at 1 because don't want to count the constant
+#               td[group]['paramSizesNormed'].append(results.params[1:].abs().mean()) # get the absolute value of the standardized coefficients and take the mean 
+#               td[group]['pvalues'].append(results.pvalues[1:].mean())
                 # the lines above record the parameter sizes and p-values of all variables. 
                 # the lines below record info only for the substituted variables, which should be last
-                td[group]['paramSizesNormed'].append(abs(results.params[-1])) # get the absolute value of the standardized coefficients and take the mean 
-                td[group]['pvalues'].append(results.pvalues[-1])
+                td[group]['paramSizesNormed'].append(abs(resultsCognate.params[-1])) # get the absolute value of the standardized coefficients and take the mean 
+                td[group]['pvalues'].append(resultsCognate.pvalues[-1])
 
-        # RUN MODELS FROM GROUP 1 ############################################  
-        # group 1
-        group = 'group1'
-
-        # make sure cIV is last in the list of variables
-        originalLHS.remove(cIV)
-        originalLHS.append(cIV) 
-        
-        for year in GSSYearsWithCognate:
-            for DV in article.DVs:        
-
-                results = runModel(year, DV, originalLHS)          
-
-#                results = runModel(year, DV, article.IVs, article.controls)          
+                # RUN MODELS FROM GROUP 1 ############################################  
+                # group 1
+                group = 'group1'
+                print 'Running original models.'
+                
+                # make sure cIV is last in the list of variables
+                originalLHS.remove(cIV)
+                originalLHS.append(cIV) 
+    
+                results = runModel(year, DV, originalLHS)                     
                 if not results: continue # results will be None if the formula cant be estimated
+                if len(results.params) != len(resultsCognate.params):
+                    print 'The number of variables in original model is different from the number in cognate model. Skipping.'                    
+                    continue
+                
+                print DV, '~', originalLHS, 'on year', year
             
-                print 'Year used: ', year
+                # Intermediate output (for years, because will average across these)
                 td[group]['Rs'].append(results.rsquared)
                 td[group]['adjRs'].append(results.rsquared_adj)
                 td[group]['numTotal'] += len(results.params[1:])
@@ -333,19 +356,21 @@ if __name__ == "__main__":
                 td[group]['paramSizesNormed'].append(abs(results.params[-1])) # get the absolute value of the standardized coefficients and take the mean 
                 td[group]['pvalues'].append(results.pvalues[-1])
          
-                     
-        # if an article's model isn't run on both UNUSED EARLY YEARS and USED years, then skip it        
-        if td['group1']['numTotal'] == 0 or td['group2']['numTotal'] == 0: continue
-      
-        for group in groups:      
-            output[group]['Rs'].append( np.mean(td[group]['Rs'])) 
-            output[group]['adjRs'].append(np.mean( td[group]['adjRs'])) 
-            output[group]['propSig'].append( td[group]['numSig']/td[group]['numTotal']) 
-            output[group]['paramSizesNormed'].append(np.mean( td[group]['paramSizesNormed'])) 
-            output[group]['pvalues'].append(np.mean( td[group]['pvalues']))
-            output[group]['numTotal'].append(td[group]['numTotal'] / len(td[group]['Rs'])) #divide by len of R^2 array to get a mean of variables estimated PER model                           
-    
-    
+            # The change I'm making is that the block below is now within the for loop
+            # of "for DV in article.DVs". So I'm averaging over years but not DVs                    
+            # if an article's model isn't run on both group 1 and group 2, skip it        
+            if td['group1']['numTotal'] == 0 or td['group2']['numTotal'] == 0: continue
+          
+            variableCognateTuples.append((cIV, cognate))
+            for group in groups:      
+                output[group]['Rs'].append( np.mean(td[group]['Rs'])) 
+                output[group]['adjRs'].append(np.mean( td[group]['adjRs'])) 
+                output[group]['propSig'].append( td[group]['numSig']/td[group]['numTotal']) 
+                output[group]['paramSizesNormed'].append(np.mean( td[group]['paramSizesNormed'])) 
+                output[group]['pvalues'].append(np.mean( td[group]['pvalues']))
+                output[group]['numTotal'].append(td[group]['numTotal'] / len(td[group]['Rs'])) #divide by len of R^2 array to get a mean of variables estimated PER model                           
+        
+        
     print 'TTests'
     for outcome in outcomes:
         print 'Means of group1 and group2:', np.mean(output['group1'][outcome]), np.mean(output['group2'][outcome]), 'Paired T-test of ' + outcome, ttest_rel(output['group1'][outcome], output['group2'][outcome])
