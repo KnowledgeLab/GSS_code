@@ -1,10 +1,9 @@
 """
 
-filename: main_analysis_pandas_version_unused_early_years.py
+filename: EDUC_vs_DEGREE.py
 
-description: This code compares regressions from articles that use only 1 wave of data where at least one variable
-is "new" .. "just came out"..
-It compares regressions on what was then the new data vs same regressions on future waves
+description: This code compares models that use the 'EDUC' variable and replaces them with the less commonly used cognate 'DEGREE.'
+It then does the same for models that use 'DEGREE' and replaces them with 'EDUC'
 
 inputs:
 
@@ -259,121 +258,203 @@ if __name__ == "__main__":
     variableCognateTuples = []
     
     # define the storage containers for outputs
-    output = defaultdict(dict)
-    groups = ['group1', 'group2']
+    outputEDUC, outputDEGREE = defaultdict(dict), defaultdict(dict)
+    groups = ['original', 'cognate']
     outcomes = ['propSig', 'paramSizesNormed', 'Rs', 'adjRs', 'pvalues', 'numTotal']
     for group in groups:
         for outcome in outcomes:
-            output[group][outcome] = []
+            outputEDUC[group][outcome], outputDEGREE[group][outcome] = [], []
             
-    articleClasses = filterArticles(articleClasses, GSSYearsUsed=True, GSSYearsPossible=False, centralIVs=True)            
-    for article in random.sample(articleClasses, 300):
+    articleClasses = filterArticles(articleClasses, GSSYearsUsed=True, GSSYearsPossible=False, centralIVs=True)
+
+    # Define the 2 groups of articles I'm interested in
+    articleClassesEDUC = [a for a in articleClasses if 'EDUC' in a.centralIVs and 'DEGREE' not in (a.centralIVs+a.IVs)]            
+    articleClassesDEGREE = [a for a in articleClasses if 'DEGREE' in a.centralIVs and 'EDUC' not in (a.centralIVs+a.IVs)]            
+
+    for article in random.sample(articleClassesEDUC, 20):
     #for article in articleClasses:
     #for article in [a for a in articleClasses if a.articleID == 934]:
-    
-        print 'Processing article:', article.articleID
-              
+        
+        print 'Processing article:', article.articleID, 'in EDUC articles.'
+                      
         # define the outcomes I'm interseted in for the two groups. td = "temp data" 
         # and initialize them for both groups
         td = defaultdict(dict)
         for group in groups:             
             td[group]['numTotal'] = 0.0
     #        td[group]['coeffsSig'] = []
-            td[group]['numSig'] = 0.0   # proportions of significant coeffs
+            td[group]['numSig'] = []   # proportions of significant coeffs
     #        td[group]['paramSizes'] = []
             td[group]['paramSizesNormed'] = []
             td[group]['Rs'] = []
             td[group]['adjRs'] = []
             td[group]['pvalues'] = []
 
-
         # let's see if this article is suitable for cognates analysis:
         originalLHS = article.IVs + article.controls
-        identifyCognatesReturns = identifyCognates(originalLHS, article.centralIVs, article.GSSYearsUsed, corrThreshold=0.8)        
-        if not identifyCognatesReturns: 
-            print 'No suitable cognates. Skipping.'            
-            continue        
-        else: 
-            cIV, cognate, GSSYearsWithCognate = identifyCognatesReturns
 
         # if we got this far, then this article does have suitable cognates, so let's estimate models       
         # Now let's estimate the models
         for DV in article.DVs:            
-            for year in GSSYearsWithCognate:        
+            for year in article.GSSYearsUsed:
+                
+                # RUN MODELS FROM GROUP 1 ############################################  
+                # group 1
+                group = 'original'
+                print 'Running original models.'
+                
+                # make sure cIV is **last** in the list of variables
+                originalLHS.remove('EDUC')
+                originalLHS.append('EDUC')
+    
+                results = runModel(year, DV, originalLHS)                     
+                if not results: continue # results will be None if the formula cant be estimated
+            
 
-                # group 2 models (with cognates)
-                group = 'group2'
+                # GROUP 2 MODELS (WITH 'EDUC' REPLACED BY 'DEGREE')
+                group = 'cognate'
                 print 'Running cognate models'
                 
-                cognateLHS = originalLHS[:]
-                cognateLHS.remove(cIV)
-                cognateLHS.append(cognate) # need to put it in list otherwise it treats each letter as an element
-                print 'Substituting', cIV, 'with cognate', cognate
-                #time.sleep(2)
-                #raw_input('Press Enter')                
+                cognateLHS = originalLHS[:]                
+                cognateLHS.remove('EDUC')
+                cognateLHS.append('DEGREE') # need to put it in list otherwise it treats each letter as an element [???]
+                
+                resultsCognate = runModel(year, DV, cognateLHS)          
+                if not resultsCognate: continue # results will be None if the formula cant be estimated
+
+                # check to make sure both models estimated the same number of parameters
+                if len(results.params) != len(resultsCognate.params):
+                    print 'The number of variables in original model is different from the number in cognate model. Skipping.'                    
+                    continue         
+                
+                if results.pvalues[-1] > 0.05: continue
+                    
+                    
+                # save the intermediate results                   
+                # Intermediate output (for years, because will average across these)
+                td['original']['Rs'].append(results.rsquared)
+                td['original']['adjRs'].append(results.rsquared_adj)
+                td['original']['numTotal'] += len(results.params[1:])
+                td['original']['numSig'].append(results.pvalues[-1] < 0.05) # start at 1 because don't want to count the constant
+                td['original']['paramSizesNormed'].append(abs(results.params[-1])) # get the absolute value of the standardized coefficients and take the mean 
+                td['original']['pvalues'].append(results.pvalues[-1])  
+
+                td['cognate']['Rs'].append(resultsCognate.rsquared)
+                td['cognate']['adjRs'].append(resultsCognate.rsquared_adj)
+                td['cognate']['numTotal'] += len(resultsCognate.params[1:])
+                td['cognate']['numSig'].append(resultsCognate.pvalues[-1] < 0.05) # start at 1 because don't want to count the constant
+                td['cognate']['paramSizesNormed'].append(abs(resultsCognate.params[-1])) # get the absolute value of the standardized coefficients and take the mean 
+                td['cognate']['pvalues'].append(resultsCognate.pvalues[-1])
+
+                
+            # The change I'm making is that the block below is now within the for loop
+            # of "for DV in article.DVs". So I'm averaging over years but not DVs                    
+            # if an article's model isn't run on both group 1 and group 2, skip it        
+            if td['original']['numTotal'] == 0 or td['cognate']['numTotal'] == 0: continue
+                
+            for group in groups:      
+                outputEDUC[group]['Rs'].append( np.mean(td[group]['Rs'])) 
+                outputEDUC[group]['adjRs'].append(np.mean( td[group]['adjRs'])) 
+                outputEDUC[group]['propSig'].append(np.mean(td[group]['numSig'])) 
+                outputEDUC[group]['paramSizesNormed'].append(np.mean( td[group]['paramSizesNormed'])) 
+                outputEDUC[group]['pvalues'].append(np.mean( td[group]['pvalues']))
+                outputEDUC[group]['numTotal'].append(td[group]['numTotal'] / len(td[group]['Rs'])) #divide by len of R^2 array to get a mean of variables estimated PER model                           
+        
+
+    for article in articleClassesDEGREE:
+    #for article in articleClasses:
+    #for article in [a for a in articleClasses if a.articleID == 934]:
+        
+        print 'Processing article:', article.articleID, 'in DEGREE articles.'
+                     
+        # define the outcomes I'm interseted in for the two groups. td = "temp data" 
+        # and initialize them for both groups
+        td = defaultdict(dict)
+        for group in groups:             
+            td[group]['numTotal'] = 0.0
+    #        td[group]['coeffsSig'] = []
+            td[group]['numSig'] = []   # proportions of significant coeffs
+    #        td[group]['paramSizes'] = []
+            td[group]['paramSizesNormed'] = []
+            td[group]['Rs'] = []
+            td[group]['adjRs'] = []
+            td[group]['pvalues'] = []
+
+        # let's see if this article is suitable for cognates analysis:
+        originalLHS = article.IVs + article.controls
+
+        # if we got this far, then this article does have suitable cognates, so let's estimate models       
+        # Now let's estimate the models
+        for DV in article.DVs:            
+            for year in article.GSSYearsUsed:
+                
+                # RUN MODELS FROM GROUP 1 ############################################  
+                # group 1
+                group = 'original'
+                print 'Running original models.'
+                
+                # make sure cIV is **last** in the list of variables
+                originalLHS.remove('DEGREE')
+                originalLHS.append('DEGREE')
+    
+                results = runModel(year, DV, originalLHS)                     
+                if not results: continue # results will be None if the formula cant be estimated
+                
+                # GROUP 2 MODELS (WITH 'EDUC' REPLACED BY 'DEGREE')
+                group = 'cognate'
+                print 'Running cognate models'
+                
+                cognateLHS = originalLHS[:]                
+                cognateLHS.remove('DEGREE')
+                cognateLHS.append('EDUC') # need to put it in list otherwise it treats each letter as an element [???]
                 
                 resultsCognate = runModel(year, DV, cognateLHS)          
                 if not resultsCognate: continue # results will be None if the formula cant be estimated
                 print DV, '~', cognateLHS, 'on year', year
-                 
-                # save the results                   
-                td[group]['Rs'].append(resultsCognate.rsquared)
-                td[group]['adjRs'].append(resultsCognate.rsquared_adj)
-                td[group]['numTotal'] += len(resultsCognate.params[1:])
-                td[group]['numSig'] += float(len([p for p in resultsCognate.pvalues[1:] if p < 0.05])) # start at 1 because don't want to count the constant
-#               td[group]['paramSizesNormed'].append(results.params[1:].abs().mean()) # get the absolute value of the standardized coefficients and take the mean 
-#               td[group]['pvalues'].append(results.pvalues[1:].mean())
-                # the lines above record the parameter sizes and p-values of all variables. 
-                # the lines below record info only for the substituted variables, which should be last
-                td[group]['paramSizesNormed'].append(abs(resultsCognate.params[-1])) # get the absolute value of the standardized coefficients and take the mean 
-                td[group]['pvalues'].append(resultsCognate.pvalues[-1])
-
-                # RUN MODELS FROM GROUP 1 ############################################  
-                # group 1
-                group = 'group1'
-                print 'Running original models.'
-                
-                # make sure cIV is last in the list of variables
-                originalLHS.remove(cIV)
-                originalLHS.append(cIV) 
-    
-                results = runModel(year, DV, originalLHS)                     
-                if not results: continue # results will be None if the formula cant be estimated
+                                 
+                # check to make sure both models estimated the same number of parameters
                 if len(results.params) != len(resultsCognate.params):
                     print 'The number of variables in original model is different from the number in cognate model. Skipping.'                    
-                    continue
+                    continue         
                 
-                print DV, '~', originalLHS, 'on year', year
-            
+                # !!!!!!!!!! NEW CONDITION. NEEDS TO BE IN 2 PLACES, HERE AND ABOVE.
+                if results.pvalues[-1] > 0.05: continue
+                    
+                # save the intermediate results                   
                 # Intermediate output (for years, because will average across these)
-                td[group]['Rs'].append(results.rsquared)
-                td[group]['adjRs'].append(results.rsquared_adj)
-                td[group]['numTotal'] += len(results.params[1:])
-                td[group]['numSig'] += float(len([p for p in results.pvalues[1:] if p < 0.05])) # start at 1 because don't want to count the constant
-#                td[group]['paramSizesNormed'].append(results.params[1:].abs().mean()) # get the absolute value of the standardized coefficients and take the mean 
-#                td[group]['pvalues'].append(results.pvalues[1:].mean())
-                #Below I want to record the info only for the variables I replaced earlier with cognates
-                td[group]['paramSizesNormed'].append(abs(results.params[-1])) # get the absolute value of the standardized coefficients and take the mean 
-                td[group]['pvalues'].append(results.pvalues[-1])
+                td['original']['Rs'].append(results.rsquared)
+                td['original']['adjRs'].append(results.rsquared_adj)
+                td['original']['numTotal'] += len(results.params[1:])
+                td['original']['numSig'].append(results.pvalues[-1] < 0.05) # start at 1 because don't want to count the constant
+                td['original']['paramSizesNormed'].append(abs(results.params[-1])) # get the absolute value of the standardized coefficients and take the mean 
+                td['original']['pvalues'].append(results.pvalues[-1])  
+
+                td['cognate']['Rs'].append(resultsCognate.rsquared)
+                td['cognate']['adjRs'].append(resultsCognate.rsquared_adj)
+                td['cognate']['numTotal'] += len(resultsCognate.params[1:])
+                td['cognate']['numSig'].append(resultsCognate.pvalues[-1] < 0.05) # start at 1 because don't want to count the constant
+                td['cognate']['pvalues'].append(resultsCognate.pvalues[-1])  
+                td['cognate']['paramSizesNormed'].append(abs(resultsCognate.params[-1])) # get the absolute value of the standardized coefficients and take the mean 
          
             # The change I'm making is that the block below is now within the for loop
             # of "for DV in article.DVs". So I'm averaging over years but not DVs                    
             # if an article's model isn't run on both group 1 and group 2, skip it        
-            if td['group1']['numTotal'] == 0 or td['group2']['numTotal'] == 0: continue
+            if td['original']['numTotal'] == 0 or td['cognate']['numTotal'] == 0: continue
           
-            variableCognateTuples.append((cIV, cognate))
             for group in groups:      
-                output[group]['Rs'].append( np.mean(td[group]['Rs'])) 
-                output[group]['adjRs'].append(np.mean( td[group]['adjRs'])) 
-                output[group]['propSig'].append( td[group]['numSig']/td[group]['numTotal']) 
-                output[group]['paramSizesNormed'].append(np.mean( td[group]['paramSizesNormed'])) 
-                output[group]['pvalues'].append(np.mean( td[group]['pvalues']))
-                output[group]['numTotal'].append(td[group]['numTotal'] / len(td[group]['Rs'])) #divide by len of R^2 array to get a mean of variables estimated PER model                           
-        
+                outputDEGREE[group]['Rs'].append( np.mean(td[group]['Rs'])) 
+                outputDEGREE[group]['adjRs'].append(np.mean( td[group]['adjRs'])) 
+                outputDEGREE[group]['propSig'].append( np.mean(td[group]['numSig'])) 
+                outputDEGREE[group]['paramSizesNormed'].append(np.mean( td[group]['paramSizesNormed'])) 
+                outputDEGREE[group]['pvalues'].append(np.mean( td[group]['pvalues']))
+                outputDEGREE[group]['numTotal'].append(td[group]['numTotal'] / len(td[group]['Rs'])) #divide by len of R^2 array to get a mean of variables estimated PER model                           
+
         
     print 'TTests'
-    for outcome in outcomes:
-        print 'Means of group1 and group2:', np.mean(output['group1'][outcome]), np.mean(output['group2'][outcome]), 'Paired T-test of ' + outcome, ttest_rel(output['group1'][outcome], output['group2'][outcome])
+    for output in [outputEDUC, outputDEGREE]:
+        print '\n'
+        for outcome in outcomes:
+            print 'Means of original and cognate:', np.mean(output['original'][outcome]), np.mean(output['cognate'][outcome]), 'Paired T-test of ' + outcome, ttest_rel(output['original'][outcome], output['cognate'][outcome])
 
     # should i put a delete command for data here?
     '''            
