@@ -16,7 +16,7 @@ outputs:
 from __future__ import division
 import cPickle as cp
 import pandas as pd
-import savReaderWriter as srw
+#import savReaderWriter as srw
 import numpy as np
 import statsmodels.formula.api as smf 
 import random, sys
@@ -24,9 +24,10 @@ from scipy.stats import pearsonr, ttest_ind, ttest_rel
 from random import choice
 import time
 
-
+'''
 # LOAD FILES ########################################################################
 sys.path.append('/mnt/ide0/home/misha/GSSproject/Code/')
+sys.path.append('../')
 from articleClass import * 
 pathToData = '../../Data/'
 ALL_VARIABLE_NAMES = cp.load(open(pathToData + 'ALL_VARIABLE_NAMES.pickle'))
@@ -40,15 +41,20 @@ YEAR_INDICES = cp.load(open(pathToData + 'YEAR_INDICES.pickle'))
 VAR_INDICES = cp.load(open(pathToData + 'VAR_INDICES_binary.pickle', 'rb'))
 articleClasses = cp.load(open(pathToData + 'articleClasses.pickle', 'rb'))
 dictOfVariableGroups = cp.load(open(pathToData + 'dictOfVariableGroups.pickle'))
-
-
+'''
+'''
+# load GSS data, ~350megs, ~20 mins to load
+pathToDf = 'C:\Users\Misha\Dropbox\GSS Project\Data/GSS Dataset/stata/'
+df = pd.read_stata(pathToDf + 'GSS7212_R4.DTA', convert_categoricals=False)
+'''
+'''
 # load GSS data
-GSSFilename = 'GSS Dataset/GSS7212_R2.sav'
+GSSFilename = 'GSS Dataset/GSS7212_R2_copy.sav'
 data = srw.SavReader(pathToData + GSSFilename)
 df = pd.DataFrame(data.all(), index=data[:,0], columns=ALL_VARIABLE_NAMES)
 with data:  # this makes sure the file will be closed, memory cleaned up after the program is run
     data = np.array(data.all()) # this makes sure the entire dataset is loaded into RAM, which makes accessing much faster
-
+'''
 
 #from GSSFunctions import *
 from collections import defaultdict
@@ -132,8 +138,8 @@ def runModel(year, DV, IVs, controls=[]):
     design = removeMissingValues(design) # remove rows with missing observations
     design = removeConstantColumns(design)    
 
-    # if line above removed DV, then can't use this model, return None
-    if not design: return None    
+    # if the line above removed DV column, then can't use this model, return None
+    if design is None or DV not in design: return None    
 
     #need to make sure there are still IVs left after we dropped some above    
     if design.shape[1] < 2: 
@@ -243,7 +249,7 @@ if __name__ == "__main__":
     
     #tempCognateOutput = open('../Data/tempCognateOutput.txt', 'w')
     articleClasses = cp.load(open(pathToData + 'articleClasses.pickle', 'rb'))
-    articlesToUse = filterArticles(articleClasses, GSSYearsUsed=True, GSSYearsPossible=False, centralIVs=True, nextYearBound=3)     
+    articlesToUse = filterArticles(articleClasses, GSSYearsUsed=True, GSSYearsPossible=False, centralIVs=True, nextYearBound=20)     
     print 'len of articleClasses:', len(articlesToUse)
     #raw_input('...')
     
@@ -252,18 +258,20 @@ if __name__ == "__main__":
     group2 = 'onNextYear'    
     output = defaultdict(dict)
     groups = [group1, group2]
-    outcomes = ['propSig', 'paramSizesNormed', 'Rs', 'adjRs', 'pvalues', 'numTotal']
+    outcomes = ['propSig', 'paramSizesNormed', 'Rs', 'adjRs', 'pvalues', 'numTotal', \
+                'propSig_CentralVars', 'paramSizesNormed_CentralVars', 'pvalues_CentralVars']
     for group in groups:
         for outcome in outcomes:
             output[group][outcome] = []
             
            
-    for article in random.sample(articlesToUse, 50):
-    #for article in articlesToUse:
+#    for article in random.sample(articlesToUse, 200):
+    for article in articlesToUse:
     #for article in [a for a in articlesToUse if a.articleID == 6755]:
     
         print 'Processing article:', article.articleID
-              
+ 
+        '''             
         # define the outcomes I'm interseted in for the two groups. td = "temp data" 
         # and initialize them for both groups
         td = defaultdict(dict)
@@ -276,19 +284,19 @@ if __name__ == "__main__":
             td[group]['Rs'] = []
             td[group]['adjRs'] = []
             td[group]['pvalues'] = []
-
+        '''
         LHS = article.IVs + article.controls
         
         for DV in article.DVs:
             maxYearUsed = max(article.GSSYearsUsed)
             futureYearsPossible = [yr for yr in article.GSSYearsPossible if yr > maxYearUsed]
-            nextYear = min(futureYearsPossible)
+            nextYear = min(futureYearsPossible) # the arguments of filterArticles function ensure that there is a suitable future year (within bound)
             
             resOnDataUsed = runModel(maxYearUsed, DV, LHS) # models run on max year of data used
             if not resOnDataUsed: continue
             resOnNextYear = runModel(nextYear, DV, LHS) # models run on min year of future data
             if not resOnNextYear: continue
-            results = [resOnDataUsed, resOnNextYear]                 
+            
             # Checks on which results to record                
             if len(resOnDataUsed.params) != len(resOnNextYear.params):
                 print 'The number of variables in original model is different from the number in cognate model. Skipping.'                    
@@ -296,15 +304,40 @@ if __name__ == "__main__":
             
             # the condition below means that i don't care about models in which orig var isn't stat. sig.
 #            if results.pvalues[-1] > 0.05: continue
-               
+            results = [resOnDataUsed, resOnNextYear]
+
+            centralVars = ['standardize(%s, ddof=1)' % (cv) for cv in article.centralIVs]
+            centralVars = set(centralVars).intersection(results[0].params.index) # need this step because some central                                                                                            # var columns may be removed when running model
+
+            for i in range(2):                 
+                output[groups[i]]['Rs'].append(results[i].rsquared) 
+                output[groups[i]]['adjRs'].append(results[i].rsquared_adj) 
+                output[groups[i]]['propSig'].append(float(len([p for p in results[i].pvalues[1:] if p < 0.05]))/len(results[i].params[1:])) 
+                output[groups[i]]['paramSizesNormed'].append(np.mean(results[i].params[1:].abs())) 
+                '''
+                if np.isnan(np.mean( td[group]['paramSizesNormed'])).any():
+                    print results[i].summary()
+                    raise
+                '''
+                output[groups[i]]['pvalues'].append(np.mean( results[i].pvalues[1:]))
+                output[groups[i]]['numTotal'].append( 1 ) #divide by len of R^2 array to get a mean of variables estimated PER model                           
+                output[groups[i]]['pvalues_CentralVars'].append(np.mean(results[i].pvalues[centralVars]))               
+                output[groups[i]]['propSig_CentralVars'].append(float(len([p for p in results[i].pvalues[centralVars] if p < 0.05])) \
+                                                        /len(results[i].params[centralVars])) 
+                output[groups[i]]['paramSizesNormed_CentralVars'].append(np.mean(results[i].params[centralVars].abs()))                
+
+            '''   
             # save the results
             for i in range(2):
                 td[groups[i]]['Rs'].append(results[i].rsquared)
                 td[groups[i]]['adjRs'].append(results[i].rsquared_adj)
                 td[groups[i]]['numTotal'] += len(results[i].params[1:])
                 td[groups[i]]['numSig'] += float(len([p for p in results[i].pvalues[1:] if p < 0.05])) # start at 1 because don't want to count the constant
-                td[groups[i]]['paramSizesNormed'].append(abs(results[i].params[1:])) # get the absolute value of the standardized coefficients and take the mean
-                td[groups[i]]['pvalues'].append(results[i].pvalues[1:])
+                td[groups[i]]['paramSizesNormed'].extend(results[i].params[1:].abs()) # get the absolute value of the standardized coefficients and take the mean
+                if np.isnan(results[i].params[1:]).any():
+                    print results[i].summary()
+                    raise
+                td[groups[i]]['pvalues'].extend(results[i].pvalues[1:])
  
             # The change I'm making is that the block below is now within the for loop
             # of "for DV in article.DVs". So I'm averaging over years but not DVs                    
@@ -317,9 +350,12 @@ if __name__ == "__main__":
                 output[group]['adjRs'].append(np.mean( td[group]['adjRs'])) 
                 output[group]['propSig'].append( td[group]['numSig']/td[group]['numTotal']) 
                 output[group]['paramSizesNormed'].append(np.mean( td[group]['paramSizesNormed'])) 
+                if np.isnan(np.mean( td[group]['paramSizesNormed'])).any():
+                    print results[i].summary()
+                    raise
                 output[group]['pvalues'].append(np.mean( td[group]['pvalues']))
                 output[group]['numTotal'].append(td[group]['numTotal'] / len(td[group]['Rs'])) #divide by len of R^2 array to get a mean of variables estimated PER model                           
-        
+            '''        
     
     print 'TTests'
     for outcome in outcomes:
