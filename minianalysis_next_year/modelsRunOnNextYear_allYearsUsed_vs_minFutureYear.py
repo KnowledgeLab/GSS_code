@@ -194,6 +194,7 @@ def filterArticles(articleClasses, GSSYearsUsed=True, GSSYearsPossible=True, noI
      - newGSSYears: skip if there are no GSS years possible besides the ones the article used
      - centralIV: skip if there is no IV(s) designated as "central"
      - nextYearBound = int: skip if next future year of data is not within "int" of last year used
+                     = 0 by default, in which case it's not used
     '''
     indicesToKeep = []
         
@@ -249,9 +250,7 @@ if __name__ == "__main__":
     
     #tempCognateOutput = open('../Data/tempCognateOutput.txt', 'w')
     articleClasses = cp.load(open(pathToData + 'articleClasses.pickle', 'rb'))
-    articles20 = filterArticles(articleClasses, GSSYearsUsed=True, GSSYearsPossible=False, centralIVs=True, nextYearBound=30)     
-    articles7 = filterArticles(articleClasses, GSSYearsUsed=True, GSSYearsPossible=False, centralIVs=True, nextYearBound=10)     
-    articlesToUse = set(articles20) - set(articles7)
+    articlesToUse = filterArticles(articleClasses, GSSYearsUsed=True, GSSYearsPossible=False, centralIVs=True, nextYearBound=0)     
     print 'len of articleClasses:', len(articlesToUse)
     #raw_input('...')
     

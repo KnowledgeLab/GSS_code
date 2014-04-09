@@ -1,3 +1,4 @@
+
 # -*- coding: utf-8 -*-
 """
 Created on Wed Apr 02 
@@ -76,8 +77,8 @@ def runModel(year, DV, IVs, controls=[]):
     design = removeMissingValues(design) # remove rows with missing observations
     design = removeConstantColumns(design)    
 
-    # if line above removed DV, then can't use this model, return None
-    if not design: return None    
+    # if the line above removed DV column, then can't use this model, return None
+    if design is None or DV not in design: return None    
 
     #need to make sure there are still IVs left after we dropped some above    
     if design.shape[1] < 2: 
