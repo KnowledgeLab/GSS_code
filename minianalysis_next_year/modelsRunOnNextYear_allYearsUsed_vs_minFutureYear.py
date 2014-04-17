@@ -261,6 +261,7 @@ if __name__ == "__main__":
     groups = [group1, group2]
     outcomes = ['propSig', 'paramSizesNormed', 'Rs', 'adjRs', 'pvalues', 'numTotal', \
                 'propSig_CentralVars', 'paramSizesNormed_CentralVars', 'pvalues_CentralVars']
+    
     for group in groups:
         for outcome in outcomes:
             output[group][outcome] = []

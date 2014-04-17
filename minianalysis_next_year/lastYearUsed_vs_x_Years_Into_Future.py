@@ -2,10 +2,9 @@
 
 filename: cognateVariablesAnalysis_model_unit_of_analysis.py
 
-description: 
-    last updated: 4/11/2014
-    Run model on last year of data used vs. next available year of data, as long as it is within a bound    
-    
+description: Runs models as specified originally and again after replacing a central variable by a cognate var.
+It compares regressions on what was then the new data vs same regressions on future waves
+
 inputs:
 
 outputs:
@@ -23,6 +22,7 @@ import statsmodels.formula.api as smf
 import random, sys
 from scipy.stats import pearsonr, ttest_ind, ttest_rel
 from random import choice
+import time
 
 '''
 # LOAD FILES ########################################################################
@@ -41,17 +41,19 @@ YEAR_INDICES = cp.load(open(pathToData + 'YEAR_INDICES.pickle'))
 VAR_INDICES = cp.load(open(pathToData + 'VAR_INDICES_binary.pickle', 'rb'))
 articleClasses = cp.load(open(pathToData + 'articleClasses.pickle', 'rb'))
 dictOfVariableGroups = cp.load(open(pathToData + 'dictOfVariableGroups.pickle'))
-
 variableTypes = cp.load(open(pathToData + 'variableTypes.pickle'))
 
+'''
+
+'''
 # load GSS data, ~350megs, ~20 mins to load
 #pathToDf = 'C:\Users\Misha\Dropbox\GSS Project\Data/GSS Dataset/stata/'
+pathToData = '../../Data/'
 pathToDf = '../../Data/GSS Dataset/stata/'
 df = pd.read_stata(pathToDf + 'GSS7212_R4.DTA', convert_categoricals=False)
 df.index = df['year']
 df.columns = map(str.upper, df.columns)
 '''
-
 '''
 # load GSS data
 GSSFilename = 'GSS Dataset/GSS7212_R2_copy.sav'
@@ -120,8 +122,10 @@ def removeConstantColumns(design):
     if len(design.ix[:,0].unique()) == 1: return None # if DV constant
     for col in design:
         if len(design[col].unique()) == 1: # if any IVs or controls constant, drop 'em
+            print 'Dropping column', col, 'because it is constant'                    
             #raw_input('asdfa')            
             design = design.drop(col, axis=1) # inplace=True option not available because i'm using an old Pandas package?
+            print design.columns
     
     return design
     
@@ -233,6 +237,7 @@ def filterArticles(articleClasses, GSSYearsUsed=True, GSSYearsPossible=True, noI
      - newGSSYears: skip if there are no GSS years possible besides the ones the article used
      - centralIV: skip if there is no IV(s) designated as "central"
      - nextYearBound = int: skip if next future year of data is not within "int" of last year used
+                     = 0 by default, in which case it's not used
     '''
     indicesToKeep = []
         
@@ -286,23 +291,25 @@ allRsForYearsUsed, allRsForYearsPossible = [], []
 ############################################################
 if __name__ == "__main__":    
     
-    
     #tempCognateOutput = open('../Data/tempCognateOutput.txt', 'w')
     articleClasses = cp.load(open(pathToData + 'articleClasses.pickle', 'rb'))
-    articlesToUse = filterArticles(articleClasses, GSSYearsUsed=True, GSSYearsPossible=True, centralIVs=True, nextYearBound=10)      
+    articlesToUse = filterArticles(articleClasses, GSSYearsUsed=True, GSSYearsPossible=False, centralIVs=True, nextYearBound=0)     
     print 'len of articleClasses:', len(articlesToUse)
     #raw_input('...')
     
     # define the storage containers for outputs
     group1 = 'onDataUsed'
-    group2 = 'onNextYear'    
+    group2 = 'onFutureYear'    
     output = defaultdict(dict)
     groups = [group1, group2]
     outcomes = ['propSig', 'paramSizesNormed', 'Rs', 'adjRs', 'pvalues', 'numTotal', \
                 'propSig_CentralVars', 'paramSizesNormed_CentralVars', 'pvalues_CentralVars']
-    for group in groups:
-        for outcome in outcomes:
-            output[group][outcome] = []
+    for yr in range(43):
+        output[yr] = {}
+        for group in groups:
+            output[yr][group] = {}
+            for outcome in outcomes:
+                output[yr][group][outcome] = []
             
            
     #for article in random.sample(articlesToUse, 200):
@@ -325,78 +332,60 @@ if __name__ == "__main__":
             td[group]['adjRs'] = []
             td[group]['pvalues'] = []
         '''
-        RHS = article.IVs + article.controls
+        LHS = article.IVs + article.controls
         
         for DV in article.DVs:
-            print DV
-            maxYearUsed = max(article.GSSYearsUsed)
-            futureYearsPossible = [yr for yr in article.GSSYearsPossible if yr > maxYearUsed]
-            nextYear = min(futureYearsPossible) # the arguments of filterArticles function ensure that there is a suitable future year (within bound)
-            
-            resOnDataUsed = runModel(maxYearUsed, DV, RHS) # models run on max year of data used
+            maxYearUsed = max(article.GSSYearsUsed)          
+            resOnDataUsed = runModel(maxYearUsed, DV, LHS) # models run on max year of data used
             if not resOnDataUsed: continue
-            resOnNextYear = runModel(nextYear, DV, RHS) # models run on min year of future data
-            if not resOnNextYear: continue
-            
-            # Checks on which results to record                
-            if len(resOnDataUsed.params) != len(resOnNextYear.params):
-                print 'The number of variables in original model is different from the number in cognate model. Skipping.'                    
-                continue
-            
-            # the condition below means that i don't care about models in which orig var isn't stat. sig.
-#            if results.pvalues[-1] > 0.05: continue
-            results = [resOnDataUsed, resOnNextYear]
 
+            # Now do future years
+            futureYearsPossible = [yr for yr in article.GSSYearsPossible if yr > maxYearUsed]
+            for futureYear in futureYearsPossible:
+                resOnFutureYear = runModel(futureYear, DV, LHS) # models run on min year of future data
+                if not resOnFutureYear: continue
             
-            # the lines below no longer work because i'm using both continuous and dummies!!
-            centralVars = []            
-            for civ in article.centralIVs:
-                if 'standardize(%s, ddof=1)' % (civ) in results[0].params.index:
-                    centralVars.append('standardize(%s, ddof=1)' % (civ))
-                else: 
-                    for col in results[0].params.index:
-                        if 'C(' + civ + ')' in col:
-                            centralVars.append(col)
- 
-            print 'IVs:', article.IVs
-            print 'centralVas:', centralVars
-#            raw_input('...')
-            '''                
-            centralVars = ['standardize(%s, ddof=1)' % (cv) for cv in article.centralIVs]
-            centralVars = set(centralVars).intersection(results[0].params.index) # need this step because some central                                                                                            # var columns may be removed when running model
-            '''
-            
-            for i in range(2):                 
-                output[groups[i]]['Rs'].append(results[i].rsquared) 
-                output[groups[i]]['adjRs'].append(results[i].rsquared_adj) 
-                output[groups[i]]['propSig'].append(float(len([p for p in results[i].pvalues[1:] if p < 0.05]))/len(results[i].params[1:])) 
-                output[groups[i]]['paramSizesNormed'].append(np.mean(results[i].params[1:].abs())) 
-                output[groups[i]]['pvalues'].append(np.mean( results[i].pvalues[1:]))
-                output[groups[i]]['numTotal'].append( 1 ) #divide by len of R^2 array to get a mean of variables estimated PER model                           
+                # Checks on which results to record                
+                if len(resOnDataUsed.params) != len(resOnFutureYear.params):
+                    print 'The number of variables in original model is different from the number in cognate model. Skipping.'                    
+                    continue
                 
-                output[groups[i]]['pvalues_CentralVars'].append(np.mean(results[i].pvalues[centralVars]))               
-                output[groups[i]]['propSig_CentralVars'].append(float(len([p for p in results[i].pvalues[centralVars] if p < 0.05])) \
-                                                        /len(results[i].params[centralVars])) 
-                output[groups[i]]['paramSizesNormed_CentralVars'].append(np.mean(results[i].params[centralVars].abs()))                
-                
+                results = [resOnDataUsed, resOnFutureYear]
+                centralVars = []            
+                for civ in article.centralIVs:
+                    if 'standardize(%s, ddof=1)' % (civ) in results[0].params.index:
+                        centralVars.append('standardize(%s, ddof=1)' % (civ))
+                    else: 
+                        for col in results[0].params.index:
+                            if 'C(' + civ + ')' in col:
+                                centralVars.append(col)
+     
+                print 'IVs:', article.IVs
+                print 'centralVas:', centralVars
+                '''    
+                centralVars = ['standardize(%s, ddof=1)' % (cv) for cv in article.centralIVs]
+                centralVars = set(centralVars).intersection(results[0].params.index) # need this step because some central                                                                                            # var columns may be removed when running model
                 '''
-                if np.isnan(np.mean( td[group]['paramSizesNormed'])).any():
-                    print results[i].summary()
-                    raise
-                '''                
-            '''   
-            # save the results
-            for i in range(2):
-                td[groups[i]]['Rs'].append(results[i].rsquared)
-                td[groups[i]]['adjRs'].append(results[i].rsquared_adj)
-                td[groups[i]]['numTotal'] += len(results[i].params[1:])
-                td[groups[i]]['numSig'] += float(len([p for p in results[i].pvalues[1:] if p < 0.05])) # start at 1 because don't want to count the constant
-                td[groups[i]]['paramSizesNormed'].extend(results[i].params[1:].abs()) # get the absolute value of the standardized coefficients and take the mean
-                if np.isnan(results[i].params[1:]).any():
-                    print results[i].summary()
-                    raise
-                td[groups[i]]['pvalues'].extend(results[i].pvalues[1:])
- 
+                
+                for i in range(2):                 
+                    output[futureYear - maxYearUsed][groups[i]]['Rs'].append(results[i].rsquared) 
+                    output[futureYear - maxYearUsed][groups[i]]['adjRs'].append(results[i].rsquared_adj) 
+                    output[futureYear - maxYearUsed][groups[i]]['propSig'].append(float(len([p for p in results[i].pvalues[1:] if p < 0.05]))/len(results[i].params[1:])) 
+                    output[futureYear - maxYearUsed][groups[i]]['paramSizesNormed'].append(np.mean(results[i].params[1:].abs())) 
+                    '''
+                    if np.isnan(np.mean( td[group]['paramSizesNormed'])).any():
+                        print results[i].summary()
+                        raise
+                    '''
+                    output[futureYear - maxYearUsed][groups[i]]['pvalues'].append(np.mean( results[i].pvalues[1:]))
+                    output[futureYear - maxYearUsed][groups[i]]['numTotal'].append( 1 ) #divide by len of R^2 array to get a mean of variables estimated PER model                           
+                    output[futureYear - maxYearUsed][groups[i]]['pvalues_CentralVars'].append(np.mean(results[i].pvalues[centralVars]))               
+                    output[futureYear - maxYearUsed][groups[i]]['propSig_CentralVars'].append(float(len([p for p in results[i].pvalues[centralVars] if p < 0.05])) \
+                                                            /len(results[i].params[centralVars])) 
+                    output[futureYear - maxYearUsed][groups[i]]['paramSizesNormed_CentralVars'].append(np.mean(results[i].params[centralVars].abs()))                
+
+
+            ''' 
             # The change I'm making is that the block below is now within the for loop
             # of "for DV in article.DVs". So I'm averaging over years but not DVs                    
             # if an article's model isn't run on both group 1 and group 2, skip it        
@@ -414,7 +403,10 @@ if __name__ == "__main__":
                 output[group]['pvalues'].append(np.mean( td[group]['pvalues']))
                 output[group]['numTotal'].append(td[group]['numTotal'] / len(td[group]['Rs'])) #divide by len of R^2 array to get a mean of variables estimated PER model                           
             '''        
-    
+            
     print 'TTests'
-    for outcome in outcomes:
-        print 'Means of group1 and group2:', np.mean(output[group1][outcome]), np.mean(output[group2][outcome]), 'Paired T-test of ' + outcome, ttest_rel(output[group1][outcome], output[group2][outcome])
+
+    for year in range(43):
+        for outcome in outcomes:
+            print year            
+            print 'Means of group1 and group2:', np.mean(output[year][group1][outcome]), np.mean(output[year][group2][outcome]), 'Paired T-test of ' + outcome, ttest_rel(output[year][group1][outcome], output[year][group2][outcome])
