@@ -13,7 +13,7 @@ import matplotlib.pylab as plt
 #fig = pl.figure(figsize=(3,8))
 fig = plt.figure(1, figsize=(8,16))
 results={}
-for i, outcome in enumerate(outcomes[4:]):
+for i, outcome in enumerate(outcomes[:4]):
     
     yearlyDiffs = [np.array(output[year][group2][outcome]) - np.array(output[year][group1][outcome]) for year in years]  
     yerr = [2*np.std(x) for x in yearlyDiffs]
@@ -25,7 +25,7 @@ for i, outcome in enumerate(outcomes[4:]):
             y.append(diffy)    
     
     ax = fig.add_subplot(4, 1, i)
-    ax.plot(x, y, '.', alpha=0.25)
+    ax.plot(x, y, '.', alpha=0.99)
     if i==0:plt.xlabel('Years after last GSS wave used')
    
     ax.text(32, 0.1, outcome, bbox={'facecolor':'red', 'alpha':0.5, 'pad':10})  

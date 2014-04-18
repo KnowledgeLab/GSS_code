@@ -50,13 +50,17 @@ YEAR_INDICES = cp.load(open(pathToData + 'YEAR_INDICES.pickle'))
 VAR_INDICES = cp.load(open(pathToData + 'VAR_INDICES_binary.pickle', 'rb'))
 articleClasses = cp.load(open(pathToData + 'articleClasses.pickle', 'rb'))
 dictOfVariableGroups = cp.load(open(pathToData + 'dictOfVariableGroups.pickle'))
+variableTypes = cp.load(open(pathToData + 'variableTypes.pickle'))
 
-# load GSS data
-GSSFilename = 'GSS Dataset/GSS7212_R2.sav'
-data = srw.SavReader(pathToData + GSSFilename)
-df = pd.DataFrame(data.all(), index=data[:,0], columns=ALL_VARIABLE_NAMES)
-with data:  # this makes sure the file will be closed, memory cleaned up after the program is run
-    data = np.array(data.all()) # this makes sure the entire dataset is loaded into RAM, which makes accessing much faster
+'''
+'''
+# load GSS data, ~350megs, ~20 mins to load
+#pathToDf = 'C:\Users\Misha\Dropbox\GSS Project\Data/GSS Dataset/stata/'
+pathToData = '../../Data/'
+pathToDf = '../../Data/GSS Dataset/stata/'
+df = pd.read_stata(pathToDf + 'GSS7212_R4.DTA', convert_categoricals=False)
+df.index = df['year']
+df.columns = map(str.upper, df.columns)
 '''
 
 from collections import defaultdict
@@ -67,7 +71,6 @@ allParamSizesForYearsUsed = []
 allParamSizesForYearsPossible = []
 allRsForYearsUsed, allRsForYearsPossible = [], []
 
-print 'len of articleClasses:', len(articleClasses)
 
 def removeMissingValues(dataMat, axis=0):
     '''
@@ -116,6 +119,38 @@ def removeConstantColumns(design):
     
     return design
     
+    
+def createFormula(design):
+    '''
+    Takes the design matrix (where first column is DV)
+    and creates a formula for Pandas/Statsmodels using the dict ov variableTypes,
+    where I've coded some variables as being categorical (and specified how many levels)
+    some as continuous, and some as DONOTUSE
+    '''
+    
+    formula = 'standardize('+ design.columns[0] +', ddof=1) ~ ' 
+
+    for col in design.columns[1:]: # don't include the DV in the RHS!
+        if col in variableTypes:        
+            varType = variableTypes[col]        
+            # if I previously coded this variable as donotuse, then don't use it            
+            if varType == 'DONOTUSE':
+                return None
+                
+            # otherwise, if the varType is a number (number of levels), dummy-fy it    
+            elif type(varType) == int:
+                if varType > 3: return None
+                else: formula += 'C('+ col + ') + '        
+            
+            # otherwise, the variable is continuous or continuous-like            
+            else: formula += 'standardize('+ col + ', ddof=1) + ' # if it's in the dict, but C or CL
+        
+        # if variable not in the dict, then treat it as continuous
+        else: formula += 'standardize('+ col + ', ddof=1) + ' # if it's not in dict, treat it as C
+
+    return formula[:-2] # the last 2 characters should be '+ '
+    
+    
 def runModel(year, DV, IVs, controls=[]):
     '''
     inputs:
@@ -127,12 +162,13 @@ def runModel(year, DV, IVs, controls=[]):
       If OLS model estimation was possibely, return results data structure from statsmodels OLS. results contains methods like .summary() and .pvalues
       else: return None 
     '''
+   
     design = df.loc[year, [DV] + IVs + controls].copy(deep=True)  # Need to make a deep copy so that original df isn't changed
     design = removeMissingValues(design) # remove rows with missing observations
     design = removeConstantColumns(design)    
 
-    # if line above removed DV, then can't use this model, return None
-    if not design: return None    
+    # if the line above removed DV column, then can't use this model, return None
+    if design is None or DV not in design: return None    
 
     #need to make sure there are still IVs left after we dropped some above    
     if design.shape[1] < 2: 
@@ -143,13 +179,19 @@ def runModel(year, DV, IVs, controls=[]):
     if design.shape[0] < design.shape[1]: # if number of rows is less than number of columns
         print 'Not enough observations. Skipping...'
         return None
-       
+    
+    '''
     # create formula
     formula = 'standardize('+ DV +', ddof=1) ~ ' 
     for col in design.columns[1:]: # don't include the DV in the RHS!
         formula += 'standardize('+ col + ', ddof=1) + '  # normalize the coefficients. ddof=1 calculates typical sd, while ddof=0 does MLE 
     formula = formula[:-2] # remove the last plus sign
-
+    '''
+    formula = createFormula(design)
+    if not formula: return None
+        
+    print formula
+    
     # calculate the results                                          
     results = smf.ols(formula, data=design, missing='drop').fit() # do I need the missing='drop' part?
 
@@ -252,7 +294,7 @@ def identifyCognates(LHS, cIVs, GSSYearsUsed, corrThreshold):
 ############################################################
 if __name__ == "__main__":    
     
-    tempCognateOutput = open('../Data/tempCognateOutput.txt', 'w')
+    tempCognateOutput = open(pathToData + 'tempCognateOutput.txt', 'w')
     
     # contains for storing (variable, cognate) tuples in order to see what substitutions
     #i'm most commonly making
@@ -268,9 +310,9 @@ if __name__ == "__main__":
             output[group][outcome] = []
             
     
-    articleClasses = filterArticles(articleClasses, GSSYearsUsed=True, GSSYearsPossible=False, centralIVs=True)            
-    for article in random.sample(articleClasses, 50):
-    #for article in articleClasses:
+    articlesToUse = filterArticles(articleClasses, GSSYearsUsed=True, GSSYearsPossible=False, centralIVs=True)            
+    #for article in random.sample(articleClasses, 200):
+    for article in articlesToUse:
     #for article in [a for a in articleClasses if a.articleID == 6755]:
     
         print 'Processing article:', article.articleID
@@ -291,7 +333,7 @@ if __name__ == "__main__":
 
         # let's see if this article is suitable for cognates analysis:
         originalLHS = article.IVs + article.controls
-        identifyCognatesReturns = identifyCognates(originalLHS, article.centralIVs, article.GSSYearsUsed, corrThreshold=0.8)        
+        identifyCognatesReturns = identifyCognates(originalLHS, article.centralIVs, article.GSSYearsUsed, corrThreshold=0.6)        
         if not identifyCognatesReturns: 
             print 'No suitable cognates. Skipping.'            
             continue        
