@@ -40,6 +40,7 @@ class articleClass():
     centralIVs = []
     GSSYearsUsed = []
     GSSYearsPossible = []
+    yearPublished = None
     missingValues = [] #? 
     '''there's a missingValues dict in the data file missingValues = {"someNumvar1": {"values": [999, -1, -2]},  # discrete values
                  "someNumvar2": {"lower": -9, "upper": -1}, # range, cf. MISSING VALUES x (-9 THRU -1)
@@ -49,7 +50,7 @@ class articleClass():
                  '''
     
     # methods
-    def __init__(self, articleID=None, IVs=[], DVs=[], controls=[], centralIVs=[], GSSYearsUsed=[], GSSYearsPossible=[]):
+    def __init__(self, articleID=None, IVs=[], DVs=[], controls=[], centralIVs=[], GSSYearsUsed=[], GSSYearsPossible=[], yearPublished=None):
         self.articleID = articleID
         self.IVs = IVs
         self.DVs = DVs
@@ -57,6 +58,7 @@ class articleClass():
         self.centralIVs = centralIVs
         self.GSSYearsUsed = GSSYearsUsed
         self.GSSYearsPossible = GSSYearsPossible
+        self.yearPublished = yearPublished
         
         
 class dataContainer:
@@ -65,7 +67,8 @@ class dataContainer:
     dictOfVariableGroups = []    
     variableTypes = []
     articleClasses = []
-
+    df = None
+    
     # functions
     def __init__(self, pathToData='../../Data/'):
         
@@ -87,7 +90,9 @@ class dataContainer:
             import pickle            
             df = pickle.load(open(pathToDf + 'df.pickle'))            
             globals()['df'] = df
-                       
+            self.df = df                  
+        else: 
+            self.df = globals()['df']
         
 def removeMissingValues(design, axis=0):
     '''
@@ -244,7 +249,8 @@ description: This module contains a functil filterArticleClasses which goes thro
 returns: list of articleClasses that have passed the filters
 '''
 
-def filterArticles(articleClasses, GSSYearsUsed=True, GSSYearsPossible=True, noIVs=True, noDVs=True, centralIVs=False, nextYearBound=0):
+def filterArticles(articleClasses, GSSYearsUsed=True, GSSYearsPossible=False, noIVs=True, noDVs=True, \
+                    centralIVs=False, nextYearBound=0, yearPublished=False, linearModels=False, GSSCentralVariable=False):
     '''
     This function filters the articleClasses list according to the following criteria.
     arguments:
@@ -254,13 +260,25 @@ def filterArticles(articleClasses, GSSYearsUsed=True, GSSYearsPossible=True, noI
      - centralIV: skip if there is no IV(s) designated as "central"
      - nextYearBound = int: skip if next future year of data is not within "int" of last year used
                      = 0 by default, in which case it's not used
+     - yearPublished=False: if set to True, yearPublished is required to be not None
+     - GSSCentralVariable=False: if True, keep only those articles where GSSCentralVariable is True in the mysql
+                                 table gss_question
+     - linearModels=False: if True, keep only those articles where model type is .. and I should think about what to use here.
+     - TODO: ADD AN "UNUSED YEARS" filter
     '''
     indicesToKeep = []
-        
+    
+    pathToData = '../../Data/'
+    if GSSCentralVariable:
+        gssCentral = cp.load(open(pathToData + 'ARTICLEID_GSS_CENTRAL_VARIABLE.pickle', 'rb'))
+
+    if linearModels:
+        modelUsed = cp.load(open(pathToData + 'ARTICLEID_AND_TRUE_IF_LINEAR_NONLINEAR.pickle', 'rb'))
+
     for ind, article in enumerate(articleClasses):
         
         a = article # to make referencing its elements shorter
-        
+    
         # skip article if there is no info on DVs or IVs
         # Should we change this to skip only if BOTH controls AND IVs are not there?
         if noDVs:
@@ -270,7 +288,7 @@ def filterArticles(articleClasses, GSSYearsUsed=True, GSSYearsPossible=True, noI
             if len(a.IVs) < 1: continue
 
         if GSSYearsUsed:         
-            # if there is no un-used years of GSS possible to run the data on, then just skip this article
+            # if there is no used years of GSS possible to run the data on, then just skip this article
             if len(a.GSSYearsUsed) < 1: continue
             
         if GSSYearsPossible:         
@@ -288,6 +306,18 @@ def filterArticles(articleClasses, GSSYearsUsed=True, GSSYearsPossible=True, noI
             maxYearUsed = max(a.GSSYearsUsed)
             futureYearsPossible = [yr for yr in a.GSSYearsPossible if yr > maxYearUsed]
             if not futureYearsPossible or min(futureYearsPossible) > maxYearUsed + nextYearBound: continue
+                   
+        if yearPublished:
+            if not a.yearPublished: continue
+                        
+        if GSSCentralVariable:
+            if a.articleID not in gssCentral or gssCentral[a.articleID]==False: continue
+        
+        if linearModels:
+            if a.articleID not in modelUsed: continue            
+            
+            
+            
                 
         # if the article survived all of the checks above add it to the list
         indicesToKeep.append(ind)

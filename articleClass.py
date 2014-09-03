@@ -21,9 +21,10 @@ class articleClass():
                  "someStrvar1": {"values": ["foo", "bar", "baz"]},
                  "someStrvar2": {"values': "bletch"}}
                  '''
+    yearPublished = None
     
     # methods
-    def __init__(self, articleID=None, IVs=[], DVs=[], controls=[], centralIVs=[], GSSYearsUsed=[], GSSYearsPossible=[]):
+    def __init__(self, articleID=None, IVs=[], DVs=[], controls=[], centralIVs=[], GSSYearsUsed=[], GSSYearsPossible=[], yearPublished=None):
         self.articleID = articleID
         self.IVs = IVs
         self.DVs = DVs
@@ -31,3 +32,4 @@ class articleClass():
         self.centralIVs = centralIVs
         self.GSSYearsUsed = GSSYearsUsed
         self.GSSYearsPossible = GSSYearsPossible
+        self.yearPublished = yearPublished

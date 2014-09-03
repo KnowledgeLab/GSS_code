@@ -14,20 +14,8 @@ outputs:
 
 """
 
-from __future__ import division
-import cPickle as cp
-import pandas as pd
-#import savReaderWriter as srw
-import numpy as np
-import statsmodels.formula.api as smf 
-import random, sys
-from scipy.stats import pearsonr, ttest_ind, ttest_rel
-from random import choice
-import time
-from collections import defaultdict
-import GSSUtility as GU
+import GSSUtility as GU # this also imports a whole bunch of other modules
 
-############################################################
 if __name__ == "__main__":    
 
     pathToData = '../../Data/'
@@ -35,7 +23,7 @@ if __name__ == "__main__":
     
     articlesToUse = GU.filterArticles(dataCont.articleClasses, GSSYearsUsed=True, GSSYearsPossible=False, centralIVs=True)            
     print 'len of articleClasses:', len(articlesToUse)
-    #raw_input('...')
+    raw_input('...')
     
     # define the storage containers for outputs
     group1 = 'onDataUsed'
@@ -52,8 +40,8 @@ if __name__ == "__main__":
                 output[yr][group][outcome] = []
             
            
-    for article in random.sample(articlesToUse, 30):
-    #for article in articlesToUse:
+    #for article in random.sample(articlesToUse, 30):
+    for article in articlesToUse:
     #for article in [a for a in articlesToUse if a.articleID == 6755]:
     
         print 'Processing article:', article.articleID
@@ -91,6 +79,8 @@ if __name__ == "__main__":
                     continue
                 
                 results = [resOnDataUsed, resOnFutureYear]
+
+                # get column names of 'central variables'; this is tricky because some hve been dummy-fied                
                 centralVars = []            
                 for civ in article.centralIVs:
                     if 'standardize(%s, ddof=1)' % (civ) in results[0].params.index:
@@ -101,11 +91,7 @@ if __name__ == "__main__":
                                 centralVars.append(col)
      
                 print 'IVs:', article.IVs
-                print 'centralVas:', centralVars
-                '''    
-                centralVars = ['standardize(%s, ddof=1)' % (cv) for cv in article.centralIVs]
-                centralVars = set(centralVars).intersection(results[0].params.index) # need this step because some central                                                                                            # var columns may be removed when running model
-                '''
+                print 'centralVars:', centralVars
                 
                 for i in range(2):                 
                     output[futureYear - maxYearUsed][groups[i]]['Rs'].append(results[i].rsquared) 
@@ -125,28 +111,12 @@ if __name__ == "__main__":
                     output[futureYear - maxYearUsed][groups[i]]['paramSizesNormed_CentralVars'].append(np.mean(results[i].params[centralVars].abs()))                
 
 
-            ''' 
-            # The change I'm making is that the block below is now within the for loop
-            # of "for DV in article.DVs". So I'm averaging over years but not DVs                    
-            # if an article's model isn't run on both group 1 and group 2, skip it        
-            if td[group1]['numTotal'] == 0 or td[group2]['numTotal'] == 0: continue
-   
-            # the part below should really be in the 'td' part above, but i'm lazy for now, so keeping things as is       
-            for group in groups:      
-                output[group]['Rs'].append( np.mean(td[group]['Rs'])) 
-                output[group]['adjRs'].append(np.mean( td[group]['adjRs'])) 
-                output[group]['propSig'].append( td[group]['numSig']/td[group]['numTotal']) 
-                output[group]['paramSizesNormed'].append(np.mean( td[group]['paramSizesNormed'])) 
-                if np.isnan(np.mean( td[group]['paramSizesNormed'])).any():
-                    print results[i].summary()
-                    raise
-                output[group]['pvalues'].append(np.mean( td[group]['pvalues']))
-                output[group]['numTotal'].append(td[group]['numTotal'] / len(td[group]['Rs'])) #divide by len of R^2 array to get a mean of variables estimated PER model                           
-            '''        
-            
+  
     print 'TTests'
 
     for year in range(43):
         for outcome in outcomes:
             print year            
             print 'Means of group1 and group2:', np.mean(output[year][group1][outcome]), np.mean(output[year][group2][outcome]), 'Paired T-test of ' + outcome, ttest_rel(output[year][group1][outcome], output[year][group2][outcome])
+
+    cp.dump(output, open('lastYearUsed_vs_x_Years_Into_Future.pickle', 'wb'))    
