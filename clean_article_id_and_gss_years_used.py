@@ -78,4 +78,4 @@ for row in articleIDAndGSSYearsUsedUncleaned:
     articleIDAndGSSYearsUsed[int(articleID)] = yearsCleaned 
 
     
-cp.dump(articleIDAndGSSYearsUsed, open(pathToData + 'articleIDAndGssYears.pickle', 'w'))
+cp.dump(articleIDAndGSSYearsUsed, open(pathToData + 'articleIDAndGssYearsUsed-cleaned.pickle', 'w'))

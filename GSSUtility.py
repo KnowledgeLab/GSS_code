@@ -1,3 +1,8 @@
+# -*- coding: utf-8 -*-
+# <nbformat>3.0</nbformat>
+
+# <codecell>
+
 
 # -*- coding: utf-8 -*-
 """
@@ -156,11 +161,16 @@ def createFormula(dataCont, design):
     and creates a formula for Pandas/Statsmodels using the dict ov variableTypes,
     where I've coded some variables as being categorical (and specified how many levels)
     some as continuous, and some as DONOTUSE
+    codes:
+        C = continuous, CL = continuous-like (no difference betw. these)
+        number = categorical, where number is the number of levels
+        DONOTUSE = would need to go back to the spreadsheet file to see where I used this code (probably for things with many, many levels)
+        
     '''
     
     formula = 'standardize('+ design.columns[0] +', ddof=1) ~ ' 
 
-    for col in design.columns[1:]: # don't include the DV in the RHS!
+    for col in design.columns[1:]: # don't include the DV in the RHS (the DV is the first element)!
         if col in dataCont.variableTypes:        
             varType = dataCont.variableTypes[col]        
             # if I previously coded this variable as donotuse, then don't use it            
@@ -402,3 +412,7 @@ def identifyCognates(dataCont, LHS, cIVs, GSSYearsUsed, corrThreshold):
         # of the cognate variable options, choose a random one
         cIV, (cognate, GSSYearsWithCognate) = random.choice(cIVCogPairs.items())     
         return cIV, cognate, GSSYearsWithCognate    
+
+# <codecell>
+
+

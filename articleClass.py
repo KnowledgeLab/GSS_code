@@ -1,4 +1,9 @@
 # -*- coding: utf-8 -*-
+# <nbformat>3.0</nbformat>
+
+# <codecell>
+
+# -*- coding: utf-8 -*-
 """
 Created on Mon Sep 09 13:57:25 2013
 
@@ -33,3 +38,4 @@ class articleClass():
         self.GSSYearsUsed = GSSYearsUsed
         self.GSSYearsPossible = GSSYearsPossible
         self.yearPublished = yearPublished
+

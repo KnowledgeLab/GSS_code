@@ -1,3 +1,8 @@
+# -*- coding: utf-8 -*-
+# <nbformat>3.0</nbformat>
+
+# <codecell>
+
 """
 Created on Mon Sep 09, 2013
 
@@ -35,9 +40,9 @@ import cPickle as cp
 
 # GLOBALS
 GSS_YEARS = [1972, 1973, 1974, 1975, 1976, 1977, 1978, 
-			1980, 1982, 1983, 1984, 1985, 1986, 1987, 1988, 1989, 
-			1990, 1991, 1993, 1994, 1996, 1998, 
-			2000, 2002, 2004, 2006, 2008, 2010, 2012]
+            1980, 1982, 1983, 1984, 1985, 1986, 1987, 1988, 1989, 
+            1990, 1991, 1993, 1994, 1996, 1998, 
+            2000, 2002, 2004, 2006, 2008, 2010, 2012]
 pathToData = 'c:/users/misha/dropbox/gss project/Data/'  
    
 # LOAD DATA ###########################
@@ -46,7 +51,14 @@ articleIDAndGSSYearsUsed = cp.load(open(pathToData + 'articleIDAndGssYearsUsed-c
 VARS_BY_YEAR = cp.load(open(pathToData + 'VARS_BY_YEAR.pickle', 'rb')) # key=year, value=set('VAR1', 'VAR2', ...)
 articleIDAndYearPublished = cp.load(open(pathToData + 'articleIDAndYearPublished.pickle'))
 
+# this function is used to impute GSSYearsUsed for articles for which we have variable information but not 
+# GSS_years_used information
+def impute_GSS_years_used(variables, publication_year):
+    candidate_years = [yr for yr in GSS_YEARS if yr <= (publication_year-2)]
+    return [yr for yr in candidate_years if set(IVs + DVs + controls + centralIVs).issubset(VARS_BY_YEAR[yr])]
+
 maxyear = 0
+countOfNoGSSYearsUsed = 0
 
 # CONSTRUCT articleCLasses LIST
 articleClasses = []
@@ -65,15 +77,25 @@ for articleID in VARS_IN_ARTICLE: # for each article for which we have informati
     controls =  map(str.upper,VARS_IN_ARTICLE[articleID]['controls'])
     centralIVs = map(str.upper,VARS_IN_ARTICLE[articleID]['centralIVs'])
 
+    # some of the entries in the dictionary below are bunk (=0).. where to do the 
+    # check for the quality of these? I'll just do it here, I guess
+    yearPublished = articleIDAndYearPublished[articleID]
+    if yearPublished < 1972 or yearPublished > 2014: yearPublished=None
 
     # skip articles for whcih we do not have information on GSS years used
     try: oldGSSYears = articleIDAndGSSYearsUsed[articleID]
-    except: continue               
+    except: 
+        if yearPublished is None:
+            countOfNoGSSYearsUsed+=1
+        else:
+            # impute GSS years
+            oldGSSYears = impute_GSS_years_used(set(IVs + DVs + controls + centralIVs), yearPublished)
+
     # check to make SURE that the GSS years the article allegedly used contain all the VARIABLES
     # the article allegedly used
     oldGSSYears = [yr for yr in oldGSSYears if set(IVs + DVs + controls + centralIVs).issubset(VARS_BY_YEAR[yr])]   
 
-    unusedGSSYears = set(GSS_YEARS) - set(oldGSSYears) 
+    unusedGSSYears = set(GSS_YEARS) - set(oldGSSYears) # whether the variables are in that year or not..
     newGSSYears = [yr for yr in sorted(unusedGSSYears) if set(IVs + DVs + controls + centralIVs).issubset(VARS_BY_YEAR[yr])]  
 
     # some of the entries in the dictionary below are bunk (=0).. where to do the 
@@ -88,5 +110,6 @@ for articleID in VARS_IN_ARTICLE: # for each article for which we have informati
     articleClasses.append(currentArticle)
 
     
-# save the list    
+#save the list    
 cp.dump(articleClasses, open(pathToData + 'articleClasses.pickle', 'wb'))
+
