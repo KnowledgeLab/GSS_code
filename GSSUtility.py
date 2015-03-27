@@ -3,8 +3,32 @@
 
 # <codecell>
 
+if __name__ == '__main__':
+    #########
+    # small script to amend the varTypes dict that stores variable types
+    # the original list is in an Excel file in the Data folder on my local machine 
+    #
+    import pandas as pd
+    from cPickle import load, dump
 
-# -*- coding: utf-8 -*-
+    pathToData='../Data/'
+    temp_file = open(pathToData + 'variableTypes.pickle', 'rb')
+    varTypes = load(temp_file)
+    temp_file.close()
+
+    df_vartypes = pd.Series(varTypes)
+    df_vartypes['HOMOSEX'] = 'CL'
+    df_vartypes['LIFE'] = 'CL'
+
+    # temp_file = open(pathToData + 'variableTypes.pickle', 'wb')
+    dump(df_vartypes.to_dict(), open(pathToData + 'variableTypes.pickle', 'wb'))
+
+# <codecell>
+
+# df_vartypes['INCOME']
+
+# <codecell>
+
 """
 Created on Wed Apr 02 
 @author: Misha
@@ -21,7 +45,7 @@ This file contains classes and functions that are commonly used in all analyses.
 The classes are articleClass, dataContainer
 
 """
-from __future__ import division
+# from __future__ import division
 import cPickle as cp
 import pandas as pd
 #import sys
@@ -35,6 +59,13 @@ from collections import defaultdict
 from GSSUtility import *
 from cPickle import load, dump
 import random # note, scipy.random.choice doesn't work even though it ought to be the same function!!!
+
+
+GSS_YEARS = [1972, 1973, 1974, 1975, 1976, 1977, 1978, 
+            1980, 1982, 1983, 1984, 1985, 1986, 1987, 1988, 1989, 
+            1990, 1991, 1993, 1994, 1996, 1998, 
+            2000, 2002, 2004, 2006, 2008, 2010, 2012]
+
 
 class articleClass():
     # attributes
@@ -151,44 +182,67 @@ def removeConstantColumns(design):
             print 'Dropping column', col, 'because it is constant'                    
             #raw_input('asdfa')            
             design = design.drop(col, axis=1) # inplace=True option not available because i'm using an old Pandas package?
-            print design.columns
+#             print design.columns
     
     return design
     
 def createFormula(dataCont, design):
     '''
     Takes the design matrix (where first column is DV)
-    and creates a formula for Pandas/Statsmodels using the dict ov variableTypes,
+    and creates a formula for Pandas/Statsmodels using the dict of variableTypes,
     where I've coded some variables as being categorical (and specified how many levels)
     some as continuous, and some as DONOTUSE
     codes:
-        C = continuous, CL = continuous-like (no difference betw. these)
+        C = continuous, CL = continuous-like (no difference betw. this and "C")
         number = categorical, where number is the number of levels
         DONOTUSE = would need to go back to the spreadsheet file to see where I used this code (probably for things with many, many levels)
         
     '''
     
-    formula = 'standardize('+ design.columns[0] +', ddof=1) ~ ' 
+#     print design.columns
+    
+    # LHS (left-hand side)
+    # check to make sure the DV is not 'DONOTUSE' or a categorical
+    DV = design.columns[0]
+    if DV not in dataCont.variableTypes: formula = 'standardize('+ DV +', ddof=1) ~ ' 
+    else:
+        varType = dataCont.variableTypes[DV]
+        if varType == 'DONOTUSE':
+#             print 'DV %s is of type DONOTUSE' % DV
+            return None
+        elif type(varType) == int and varType > 2:
+#             print 'DV %s is categorical with more than 2 categories' % DV
+            return None
+        else:
+            formula = 'standardize('+ DV +', ddof=1) ~ ' 
 
+    # RHS (right-hand side)
     for col in design.columns[1:]: # don't include the DV in the RHS (the DV is the first element)!
+ 
         if col in dataCont.variableTypes:        
-            varType = dataCont.variableTypes[col]        
-            # if I previously coded this variable as donotuse, then don't use it            
-            if varType == 'DONOTUSE':
-                return None
-                
-            # otherwise, if the varType is a number (number of levels), dummy-fy it    
-            elif type(varType) == int:
-                if varType > 3: return None
-                else: formula += 'C('+ col + ') + '        
-            
-            # otherwise, the variable is continuous or continuous-like            
-            else: formula += 'standardize('+ col + ', ddof=1) + ' # if it's in the dict, but C or CL
-        
-        # if variable not in the dict, then treat it as continuous
-        else: formula += 'standardize('+ col + ', ddof=1) + ' # if it's not in dict, treat it as C
 
-    return formula[:-2] # the last 2 characters should be '+ '
+            varType = dataCont.variableTypes[col]        
+
+            if varType == 'DONOTUSE': 
+                print 'IV %s is of type "DONOTUSE"' % col
+                continue
+                
+            elif type(varType) == int:
+                if varType > 15: # if >15 levels
+                    print 'categorical variable %s has more than 15 levels' % col
+                else: formula += 'C('+ col + ') + '        
+                continue
+        
+        # all other cases (not in dict, in dict but C or CL), treat it as continuous
+        formula += 'standardize('+ col + ', ddof=1) + ' # if it's not in dict, treat it as C
+    
+    # the last 3 characters should be ' + '
+    formula = formula[:-3]
+    
+#     print 'IVs count=', design.shape[1]-1, 'fomula is:', formula
+    
+    if '~' not in formula: return None # no suitable IVs added to formula
+    else: return formula
     
 def runModel(dataCont, year, DV, IVs, controls=[]):
     '''
@@ -202,12 +256,24 @@ def runModel(dataCont, year, DV, IVs, controls=[]):
       else: return None 
     '''
    
-    design = df.loc[year, [DV] + IVs + controls].copy(deep=True)  # Need to make a deep copy so that original df isn't changed
+    design = df.loc[year, [DV] + IVs + controls]
+    # gonna cut off the following from the line above.. shouldn't need it:
+    #.copy(deep=True)  # Need to make a deep copy so that original df isn't changed
+
+    # IMPUTE MISSING VALUES: Just use the mean. THis is to avoid having too few observations for estimation, 
+    # as happens sometimes when you don't impute.
+    # keep in mind that this gets messy when the variable is categorical!!! should maybe use mode.. 
+    design = design.fillna(design.mean())
+    
+    # the line below should now never (?) do anything, because there should be no more nan's
     design = dropRowsWithNans(design) # remove rows with missing observations
+    
     design = removeConstantColumns(design)    
 
     # if the line above removed DV column, then can't use this model, return None
-    if design is None or DV not in design: return None    
+    if design is None or DV not in design: 
+        print 'design is None or DV not in design'
+        return None    
 
     #need to make sure there are still IVs left after we dropped some above    
     if design.shape[1] < 2: 
@@ -219,17 +285,12 @@ def runModel(dataCont, year, DV, IVs, controls=[]):
         print 'Not enough observations. Skipping...'
         return None
     
-    '''
-    # create formula
-    formula = 'standardize('+ DV +', ddof=1) ~ ' 
-    for col in design.columns[1:]: # don't include the DV in the RHS!
-        formula += 'standardize('+ col + ', ddof=1) + '  # normalize the coefficients. ddof=1 calculates typical sd, while ddof=0 does MLE 
-    formula = formula[:-2] # remove the last plus sign
-    '''
     formula = createFormula(dataCont, design)
-    if not formula: return None
+    if not formula: 
+        print 'Couldnt construct a suitable formula'
+        return None
         
-    print formula
+#     print formula
     
     # calculate the results                                          
     results = smf.ols(formula, data=design, missing='drop').fit() # do I need the missing='drop' part?
@@ -259,14 +320,15 @@ description: This module contains a functil filterArticleClasses which goes thro
 returns: list of articleClasses that have passed the filters
 '''
 
-def filterArticles(articleClasses, GSSYearsUsed=True, GSSYearsPossible=False, noIVs=True, noDVs=True, \
+def filterArticles(articleClasses, GSSYearsUsed=True, GSSYearsPossible=False, unusedGSSYears=False, noIVs=True, noDVs=True, \
                     centralIVs=False, nextYearBound=0, yearPublished=False, linearModels=False, GSSCentralVariable=False):
     '''
     This function filters the articleClasses list according to the following criteria.
     arguments:
      - noIVs: skip if no IVs specified
      - noDVs: skip if no DVs specified
-     - newGSSYears: skip if there are no GSS years possible besides the ones the article used
+     - GSSYearsPossible: skip if there are no GSS years possible besides the ones the article used
+     - unusedGSSYears=False: If True, then keep only those articles which have some GSS Years they could have used, but didn't
      - centralIV: skip if there is no IV(s) designated as "central"
      - nextYearBound = int: skip if next future year of data is not within "int" of last year used
                      = 0 by default, in which case it's not used
@@ -285,10 +347,8 @@ def filterArticles(articleClasses, GSSYearsUsed=True, GSSYearsPossible=False, no
     if linearModels:
         modelUsed = cp.load(open(pathToData + 'ARTICLEID_AND_TRUE_IF_LINEAR_NONLINEAR.pickle', 'rb'))
 
-    for ind, article in enumerate(articleClasses):
+    for ind, a in enumerate(articleClasses):  # a = article
         
-        a = article # to make referencing its elements shorter
-    
         # skip article if there is no info on DVs or IVs
         # Should we change this to skip only if BOTH controls AND IVs are not there?
         if noDVs:
@@ -304,6 +364,10 @@ def filterArticles(articleClasses, GSSYearsUsed=True, GSSYearsPossible=False, no
         if GSSYearsPossible:         
             # if there is no un-used years of GSS possible to run the data on, then just skip this article
             if len(a.GSSYearsPossible) < 1: continue
+
+        if unusedGSSYears:
+            unusedEarlyYears = [yr for yr in a.GSSYearsPossible if yr <= max(a.GSSYearsUsed)]
+            if len(unusedEarlyYears)==0: continue
             
         if centralIVs:    
             # if GSS is not the central dataset used then skip

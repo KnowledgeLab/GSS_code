@@ -55,17 +55,16 @@ for outcome in output:
     print 'slope:'+str(result.params[1])+', '+str(result.pvalues[1])
     '''
 
-    figure()
+    
     title(outcome)
     xlabel('Year article was published')    
 #    plot(x, y, 'x', x_means, y_means, 'o')
-#    plot(output.index, yMeans, 'o', alpha=0.9)
-    plot(Xs, Ys, 'x', alpha=0.7)    
+    plot(output.index, yMeans, 'o', alpha=0.9)
+    #plot(Xs, Ys, 'x', alpha=0.7)    
     result = smf.ols(data=pd.DataFrame({'y':Ys, 'x':np.array(Xs)-1973}), formula='y~x').fit()    
     #result = smf.OLS(y_means,smt.add_constant(x_means)).fit() 
     plot(years, (np.array(years)-1973)*result.params[1] + result.params[0], 'r--')
     figtext(0.6, 0.8, 'slope:'+str(np.around(result.params[1],4))+', p='+str(np.around(result.pvalues[1],3)))
     figtext(0.55, 0.75, 'green=raw data, blue=means')
     print 'intercept:'+str(result.params[0])+', '+str(result.pvalues[0])
-    raw_input('...')
     show()
