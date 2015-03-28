@@ -1,7 +1,7 @@
-# -*- coding: utf-8 -*-
-# <nbformat>3.0</nbformat>
 
-# <codecell>
+# coding: utf-8
+
+# In[1]:
 
 if __name__ == '__main__':
     #########
@@ -23,14 +23,16 @@ if __name__ == '__main__':
     # temp_file = open(pathToData + 'variableTypes.pickle', 'wb')
     dump(df_vartypes.to_dict(), open(pathToData + 'variableTypes.pickle', 'wb'))
 
-# <codecell>
+
+# In[2]:
 
 # df_vartypes['INCOME']
 
-# <codecell>
+
+# In[3]:
 
 """
-Created on Wed Apr 02 
+Created on Wed Apr 02, 2014
 @author: Misha
 
 description:
@@ -320,8 +322,7 @@ description: This module contains a functil filterArticleClasses which goes thro
 returns: list of articleClasses that have passed the filters
 '''
 
-def filterArticles(articleClasses, GSSYearsUsed=True, GSSYearsPossible=False, unusedGSSYears=False, noIVs=True, noDVs=True, \
-                    centralIVs=False, nextYearBound=0, yearPublished=False, linearModels=False, GSSCentralVariable=False):
+def filterArticles(articleClasses, GSSYearsUsed=True, GSSYearsPossible=False, unusedGSSYears=False, noIVs=True, noDVs=True,                     centralIVs=False, nextYearBound=0, yearPublished=False, linearModels=False, GSSCentralVariable=False):
     '''
     This function filters the articleClasses list according to the following criteria.
     arguments:
@@ -476,7 +477,4 @@ def identifyCognates(dataCont, LHS, cIVs, GSSYearsUsed, corrThreshold):
         # of the cognate variable options, choose a random one
         cIV, (cognate, GSSYearsWithCognate) = random.choice(cIVCogPairs.items())     
         return cIV, cognate, GSSYearsWithCognate    
-
-# <codecell>
-
 
