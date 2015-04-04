@@ -1,7 +1,5 @@
-# -*- coding: utf-8 -*-
-# <nbformat>3.0</nbformat>
 
-# <markdowncell>
+# coding: utf-8
 
 # filename: minianalysis__models_run_on_last_year_vs_next_year.py
 # 
@@ -14,8 +12,13 @@
 # outputs:
 # 
 # @author: Misha
+# 
 
-# <codecell>
+# In[43]:
+
+get_ipython().magic(u'matplotlib inline')
+
+import matplotlib.pyplot as plt
 
 from __future__ import division
 import pandas as pd
@@ -35,12 +38,14 @@ from collections import defaultdict
 
 import seaborn
 
-# <codecell>
 
-%rm ../GSSUtility.pyc # remove this file because otherwise it will be used instead of the updated .py file
+# In[36]:
+
+get_ipython().magic(u'rm ../GSSUtility.pyc # remove this file because otherwise it will be used instead of the updated .py file')
 reload(GU)
 
-# <codecell>
+
+# In[37]:
 
 #*********************************************************
 allPropsForYearsUsed = []
@@ -56,8 +61,7 @@ if __name__ == "__main__":
     pathToData = '../../Data/'
     dataCont = GU.dataContainer(pathToData)
     
-    articlesToUse = GU.filterArticles(dataCont.articleClasses, GSSYearsUsed=True, GSSYearsPossible=True, \
-                                        centralIVs=True, nextYearBound=3) #, linearModels=True)            
+    articlesToUse = GU.filterArticles(dataCont.articleClasses, GSSYearsUsed=True, GSSYearsPossible=True,                                         centralIVs=True, nextYearBound=3) #, linearModels=True)            
     print 'len of articleClasses:', len(articlesToUse)
 #     raw_input('...')
     
@@ -65,8 +69,7 @@ if __name__ == "__main__":
     group1 = 'on last GSS year'
     group2 = 'on first "future" GSS year'   
     groups = [group1, group2]
-    outcomes = ['propSig', 'paramSizesNormed', 'Rs', 'adjRs', 'pvalues',  'numTotal', \
-                'propSig_CentralVars', 'paramSizesNormed_CentralVars', 'pvalues_CentralVars']
+    outcomes = ['propSig', 'paramSizesNormed', 'Rs', 'adjRs', 'pvalues',  'numTotal',                 'propSig_CentralVars', 'paramSizesNormed_CentralVars', 'pvalues_CentralVars']
 
     output = defaultdict(dict)
     output['metadata'] = {'article_id':[]}
@@ -75,8 +78,8 @@ if __name__ == "__main__":
             output[group][outcome] = []
             
            
-#     for article in random.sample(articlesToUse, 50):
-    for article in articlesToUse:
+    for article in random.sample(articlesToUse, 50):
+#     for article in articlesToUse:
     #for article in [a for a in articlesToUse if a.articleID == 6755]:
     
         print 'Processing article:', article.articleID
@@ -141,8 +144,7 @@ if __name__ == "__main__":
                 
 #                 if len(centralVars)>0:
                 output[groups[i]]['pvalues_CentralVars'].append(np.mean(results[i].pvalues[centralVars]))               
-                output[groups[i]]['propSig_CentralVars'].append(float(len([p for p in results[i].pvalues[centralVars] if p < 0.05])) \
-                                                        /len(results[i].params[centralVars])) 
+                output[groups[i]]['propSig_CentralVars'].append(float(len([p for p in results[i].pvalues[centralVars] if p < 0.05]))                                                         /len(results[i].params[centralVars])) 
                 output[groups[i]]['paramSizesNormed_CentralVars'].append(np.mean(results[i].params[centralVars].abs()))                
         
             output['metadata']['article_id'].append(article.articleID)                 
@@ -153,14 +155,13 @@ if __name__ == "__main__":
 #     for outcome in outcomes:
 #         print 'Means of group1 and group2:', np.mean(output[group1][outcome]), np.mean(output[group2][outcome]), 'Paired T-test of ' + outcome, ttest_rel(output[group1][outcome], output[group2][outcome])
 
-# <markdowncell>
 
 # Create dataframe that contains the output 
 # --
 
-# <codecell>
+# In[39]:
 
-df_output = pd.DataFrame(index=arange(len(output[group1]['propSig'])), columns=pd.MultiIndex.from_product([groups, outcomes]))
+df_output = pd.DataFrame(index=np.arange(len(output[group1]['propSig'])), columns=pd.MultiIndex.from_product([groups, outcomes]))
 df_output.columns.names = ['outcome','group']
 for outcome in outcomes:
     for gp in groups:
@@ -170,46 +171,39 @@ del df_output[group1, 'numTotal']
 del df_output[group2, 'numTotal']
 # df_output
 
-# <codecell>
+
+# In[40]:
 
 outcomes.remove('numTotal')
 
-# <markdowncell>
 
 # ###Number of unique articles used
 
-# <codecell>
+# In[41]:
 
 len(df_output['article_id'].unique())
 
-# <markdowncell>
 
 # Plot the output
 # --
 
-# <codecell>
+# In[46]:
 
-outcomesToUse
-
-# <codecell>
-
-figsize(12,8)
 outcomesToUse = df_output[group1].columns
 indices = np.arange(len(outcomesToUse))
 width = 0.35
-axes = figure().add_subplot(111)
-rects1 = bar(left=indices, width=width, height=df_output[group1].mean(), color='r')#, yerr=df_output['orig. models'].std()) #this is not relevant because we're not comparing groups
-rects2 = bar(left=indices+width, width=width, height=df_output[group2].mean(), color='y')#, yerr=df_output['cognate models'].std())
+axes = plt.figure(figsize=(12,8)).add_subplot(111)
+rects1 = plt.bar(left=indices, width=width, height=df_output[group1].mean(), color='r')#, yerr=df_output['orig. models'].std()) #this is not relevant because we're not comparing groups
+rects2 = plt.bar(left=indices+width, width=width, height=df_output[group2].mean(), color='y')#, yerr=df_output['cognate models'].std())
 
 # title, legend, etc
-title('Models Using Last GSS Year vs. First "Future" Year', fontsize=18)
-legend((rects1[0], rects2[0]), ('Last Yr.', '1st Future Yr.'), fontsize=15)
-xlim((-1*width, len(outcomesToUse)))
+plt.title('Models Using Last GSS Year vs. First "Future" Year', fontsize=18)
+plt.legend((rects1[0], rects2[0]), ('Last Yr.', '1st Future Yr.'), fontsize=15)
+plt.xlim((-1*width, len(outcomesToUse)))
 
 # tick labels
 # a = outcomesToUse
-a = ['% of coeffs. stat. sign.', 'avg. coeff. size', 'R_sq.', 'adj. R_sq.', 'avg. p-value', \
-     '"central" vars: % of coeffs. stat. sign.', '"central" vars: avg. coeff. size', '"central" vars: avg. p-value']
+a = ['% of coeffs. stat. sign.', 'avg. coeff. size', 'R_sq.', 'adj. R_sq.', 'avg. p-value',      '"central" vars: % of coeffs. stat. sign.', '"central" vars: avg. coeff. size', '"central" vars: avg. p-value']
 axes.set_xticks(indices+width)
 axes.set_xticklabels(a, rotation=90, fontsize=15)
 
@@ -229,12 +223,11 @@ autolabel(rects1)
 
 # savefig('../../Images/ASA2015/models_using_last_gss_year_vs_first_future_year.png', bbox_inches='tight')
 
-# <markdowncell>
 
 # Perform t-tests
 # --
 
-# <codecell>
+# In[ ]:
 
 # (df_output['adjRs','orig. models'] - df_output['adjRs','cognate models']).plot(kind='kde')
 
@@ -246,7 +239,6 @@ for outcome in outcomes:
     print ttest_rel(df_output[group1, outcome], df_output[group2, outcome])[1]
     print
 
-# <markdowncell>
 
 # Perform t-tests and Tests using *clustered errors*
 # --
@@ -269,8 +261,9 @@ for outcome in outcomes:
 # Outcome
 # --
 # The p-values are larger (for some outcomes, they are now > 0.05) but are still sufficiently small?
+# 
 
-# <codecell>
+# In[ ]:
 
 # (df_output['adjRs','orig. models'] - df_output['adjRs','cognate models']).plot(kind='kde')
 
@@ -293,10 +286,7 @@ for outcome in outcomes:
     # 2. Fit models
 #     result = smf.ols(formula='y~x', data=pd.DataFrame({'y':outcomes_combined, 'x':dummy})).fit() # do I need a constant???
 #     result = smf.ols(formula='y~x-1', data=pd.DataFrame({'y':diffs, 'x':[1]*len(diffs)})).fit()
-    result_clustered = smf.ols(formula='y~x-1', \
-                     data=pd.DataFrame({'y':diffs, 'x':[1]*len(diffs)})).fit(missing='drop', \
-                                                                             cov_type='cluster', \
-                                                            cov_kwds=dict(groups=df_output.article_id))
+    result_clustered = smf.ols(formula='y~x-1',                      data=pd.DataFrame({'y':diffs, 'x':[1]*len(diffs)})).fit(missing='drop',                                                                              cov_type='cluster',                                                             cov_kwds=dict(groups=df_output.article_id))
                                                                                                
 # these two methods produce slightly different results. neither is necessary because i'm using parameters
 # of the model.fit() method above instead to use clustered standard errors.
@@ -314,15 +304,16 @@ for outcome in outcomes:
 #     print 'clustered errors p-value:', np.around(result_rob.pvalues[0], 3)
     print
 
-# <codecell>
+
+# In[ ]:
 
 
-# <markdowncell>
+
 
 # How many models' avg p-value is above 0.05?
 # --
 
-# <codecell>
+# In[ ]:
 
 # need to see tally up how switched from being below to being above
 # i.e. need to condition on being below beforehand, and how many of those are above now
@@ -331,6 +322,8 @@ print 'count:', df_output[group2]['pvalues'][df_output[group2]['pvalues'] > 0.05
 print 'total:', df_output.shape[0]
 print 'percent:', df_output[]['pvalues'][df_output['cognate models']['pvalues'] > 0.05].shape[0]/ df_output.shape[0]
 
-# <codecell>
+
+# In[ ]:
+
 
 
