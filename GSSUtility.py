@@ -257,6 +257,7 @@ def createFormula(dataCont, design):
 def runModel(dataCont, year, DV, IVs, controls=[]):
     '''
     TODO: USE np.corrcoef(matrix) TO FIGURE OUT WHICH VARIABLES ARE COLLINEAR SO THAT I CAN DROP SOME OF THEM
+    
     inputs:
       - the year of GSS to use
       - Dependent Variable (just 1)
