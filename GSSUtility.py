@@ -1,7 +1,7 @@
 
 # coding: utf-8
 
-# In[119]:
+# In[138]:
 
 if __name__ == '__main__':
     #########
@@ -256,6 +256,7 @@ def createFormula(dataCont, design):
     
 def runModel(dataCont, year, DV, IVs, controls=[]):
     '''
+    TODO: USE np.corrcoef(matrix) TO FIGURE OUT WHICH VARIABLES ARE COLLINEAR SO THAT I CAN DROP SOME OF THEM
     inputs:
       - the year of GSS to use
       - Dependent Variable (just 1)
@@ -267,7 +268,7 @@ def runModel(dataCont, year, DV, IVs, controls=[]):
     '''   
     design = df.loc[year, [DV] + IVs + controls]
     design = design.astype(float) # again because R messes up for ints
-    design.index = range(len(design)) # using R for imputation messes up when the index is all the same values (year)
+#     design.index = range(len(design)) # using R for imputation messes up when the index is all the same values (year)
     
     # gonna cut off the following from the line above.. shouldn't need it:
     #.copy(deep=True)  # Need to make a deep copy so that original df isn't changed
