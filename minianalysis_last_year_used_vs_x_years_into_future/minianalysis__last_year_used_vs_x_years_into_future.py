@@ -1,10 +1,5 @@
-# -*- coding: utf-8 -*-
-# <nbformat>3.0</nbformat>
 
-# <codecell>
-
-
-# <markdowncell>
+# coding: utf-8
 
 # #Minianalysis: Last year used vs. X years into future
 # 
@@ -24,11 +19,14 @@
 # 
 # """
 
-# <codecell>
+# In[26]:
+
+from __future__ import division
+
+import matplotlib.pyplot as plt
 
 import pandas as pd
 
-from __future__ import division
 #import cPickle as cp
 import sys
 sys.path.append('../')    
@@ -37,15 +35,22 @@ import GSSUtility as GU
 import numpy as np
 import statsmodels.formula.api as smf 
 import random
-from scipy.stats import pearsonr, ttest_ind, ttest_rel
-
+from scipy.stats import pearsonr, ttest_ind, ttest_rel, nanmean, nanstd
+import pickle
 import time
 from collections import Counter
 from collections import defaultdict
 
 import seaborn
 
-# <codecell>
+
+# In[3]:
+
+get_ipython().magic(u'rm ../GSSUtility.pyc # remove this file because otherwise it will be used instead of the updated .py file')
+reload(GU)
+
+
+# In[10]:
 
 if __name__ == "__main__":    
 
@@ -61,8 +66,7 @@ if __name__ == "__main__":
     group2 = 'on_future_year'    
     output = defaultdict(dict)
     groups = [group1, group2]
-    outcomes = ['propSig', 'paramSizesNormed', 'Rs', 'adjRs', 'pvalues', 'numTotal', \
-                'propSig_CentralVars', 'paramSizesNormed_CentralVars', 'pvalues_CentralVars']
+    outcomes = ['propSig', 'paramSizesNormed', 'Rs', 'adjRs', 'pvalues', 'numTotal',                 'propSig_CentralVars', 'paramSizesNormed_CentralVars', 'pvalues_CentralVars']
     
     for yr in range(43):
 #         output[yr] = {}
@@ -74,9 +78,8 @@ if __name__ == "__main__":
             output[yr][group] = {}
             for outcome in outcomes:
                 output[yr][group][outcome] = []
-            
-           
-#     for article in random.sample(articlesToUse, 50):
+      
+#    for article in random.sample(articlesToUse, 50):
     for article in articlesToUse:
     #for article in [a for a in articlesToUse if a.articleID == 6755]:
     
@@ -102,7 +105,8 @@ if __name__ == "__main__":
             
             # the 3 lines below is the model estimated on the last year of data used, and stays constant when i put it into
             # the output data structure. the loop below only goes over "future possible years"
-            maxYearUsed = max(article.GSSYearsUsed)          
+            maxYearUsed = max(article.GSSYearsUsed)    
+
             resOnDataUsed = GU.runModel(dataCont, maxYearUsed, DV, RHS) # models run on max year of data used
             if not resOnDataUsed: continue
 
@@ -112,7 +116,7 @@ if __name__ == "__main__":
                 if 'standardize(%s, ddof=1)' % (civ) in resOnDataUsed.params.index:
                     centralVars.append('standardize(%s, ddof=1)' % (civ))
                 else: 
-                    for col in results[0].params.index:
+                    for col in resOnDataUsed.params.index:
                         if 'C(' + civ + ')' in col:
                             centralVars.append(col)
                     
@@ -123,9 +127,9 @@ if __name__ == "__main__":
             # So the condition below ensures that at least one of the central variables was found to be "important" in the original 
             # article.
             # This throws away 67 observations.
-            if np.all(resOnDataUsed.pvalues[centralVars] > 0.05): 
-                print 'All "central" IVs are p > 0.05. Skipping.'
-                continue
+#             if np.all(resOnDataUsed.pvalues[centralVars] > 0.05): 
+#                 print 'All "central" IVs are p > 0.05. Skipping.'
+#                 continue
 
             # Now do future years
             futureYearsPossible = [yr for yr in article.GSSYearsPossible if yr > maxYearUsed]
@@ -155,10 +159,17 @@ if __name__ == "__main__":
                     '''
                     output[futureYear - maxYearUsed][groups[i]]['pvalues'].append(np.mean( results[i].pvalues[1:]))
                     output[futureYear - maxYearUsed][groups[i]]['numTotal'].append( 1 ) #divide by len of R^2 array to get a mean of variables estimated PER model                           
-                    output[futureYear - maxYearUsed][groups[i]]['pvalues_CentralVars'].append(np.mean(results[i].pvalues[centralVars]))               
-                    output[futureYear - maxYearUsed][groups[i]]['propSig_CentralVars'].append(float(len([p for p in results[i].pvalues[centralVars] if p < 0.05])) \
-                                                            /len(results[i].params[centralVars])) 
-                    output[futureYear - maxYearUsed][groups[i]]['paramSizesNormed_CentralVars'].append(np.mean(results[i].params[centralVars].abs()))                
+
+                    if len(centralVars)>0:
+                        output[futureYear - maxYearUsed][groups[i]]['pvalues_CentralVars'].append(np.mean(results[i].pvalues[centralVars]))               
+                        output[futureYear - maxYearUsed][groups[i]]['propSig_CentralVars'].append(float(len([p for p in results[i].pvalues[centralVars] if p < 0.05]))                                                                 /len(results[i].params[centralVars])) 
+                        output[futureYear - maxYearUsed][groups[i]]['paramSizesNormed_CentralVars'].append(np.mean(results[i].params[centralVars].abs()))                
+                    
+                    else:
+                        output[futureYear - maxYearUsed][groups[i]]['pvalues_CentralVars'].append(np.nan)               
+                        output[futureYear - maxYearUsed][groups[i]]['propSig_CentralVars'].append(np.nan)                                                        
+                        output[futureYear - maxYearUsed][groups[i]]['paramSizesNormed_CentralVars'].append(np.nan)                
+
                 
                 # Now fill out metadata. It's not in the loop above because it's the same for both groups
                 output[futureYear - maxYearUsed]['metadata']['last_GSS_year_used'].append(maxYearUsed)
@@ -173,7 +184,18 @@ if __name__ == "__main__":
 #             print 'Means of group1 and group2:', np.mean(output[year][group1][outcome]), np.mean(output[year][group2][outcome]), \
 #                     'Paired T-test of ' + outcome, ttest_rel(output[year][group1][outcome], output[year][group2][outcome])
 
-# <codecell>
+
+# In[3]:
+
+pickle.dump(output, open('output.pickle', 'w'))
+
+
+# In[28]:
+
+output = pickle.load(open('output.pickle'))
+
+
+# In[29]:
 
 # info on the articles used
 all_articles = []
@@ -181,11 +203,11 @@ for yr in range(43):
     all_articles.extend(output[yr]['metadata']['articleID'])
 print 'Num of unique articles used:', len(set(all_articles))
 
-# <codecell>
+
+# In[13]:
 
 output[0]['metadata']['articleID']
 
-# <markdowncell>
 
 # #Plot outcomes x years into future
 # 
@@ -195,14 +217,14 @@ output[0]['metadata']['articleID']
 # 
 # A clue is that the sample size that goes into computing each mean (blue dot) decreases with the time-difference (see plot below). But **I don't know why this would matter.**
 # 
-
-# <markdowncell>
+# 
 
 # First, plot the actual outcomes (not *differences*)
 # --
 
-# <codecell>
+# In[16]:
 
+get_ipython().magic(u'matplotlib inline')
 # group1 = 'on_last_year_of_data'
 # group2 = 'on_future_year'    
 
@@ -234,7 +256,7 @@ for i, outcome in enumerate(outcomes_ordered):
     onGp1 = [np.array(output[year][group1][outcome]) for year in YEARS]  
     onGp2 = [np.array(output[year][group2][outcome]) for year in YEARS]  
 
-    yerr = [2*np.std(x) for x in yearlyDiffs]
+#     yerr = [2*np.std(x) for x in yearlyDiffs]
     meansGp1 = [np.mean(x) for x in onGp1]
     meansGp2 = [np.mean(x) for x in onGp2]
         
@@ -263,16 +285,15 @@ for i, outcome in enumerate(outcomes_ordered):
                       xytext=(5,5), textcoords='offset points')
     
     # print the intercept and its p-value for my inspection, not on the figure
-    print 'intercept:'+str(result.params[0])+', '+str(result.pvalues[0])
+#     print 'intercept:'+str(result.params[0])+', '+str(result.pvalues[0])
 
 # add title and common x-label
 f.text(0.5, 0.05, 'Years after publication', ha='center',  va='bottom',fontsize=14)
 f.text(0.5, 1-0.05, 'Outcomes x-Years Into Future', ha='center', fontsize=20)
 f.text(0.5, 1-0.075, 'Red: on last year used, Blue: on future year', ha='center', fontsize=18, style='italic', color='red')
 
-savefig('../../Images/2014-10-06-TWO-CURVES-outcomes_last_year_vs_x_years_into_future_all_8.png')
+# savefig('../../Images/2014-10-06-TWO-CURVES-outcomes_last_year_vs_x_years_into_future_all_8.png')
 
-# <markdowncell>
 
 # NOTE: 
 # --
@@ -280,24 +301,21 @@ savefig('../../Images/2014-10-06-TWO-CURVES-outcomes_last_year_vs_x_years_into_f
 # 
 # And I've already looked at trends in outcomes over time and didn't find any trends!
 
-# <markdowncell>
-
 # Plot number of points at each time period
 # --
 
-# <codecell>
+# In[ ]:
 
 SIZES = [len(x) for x in onGp1]
 plot(YEARS, SIZES)
 title('Number of models at each time-difference (for graphs above)')
 xlabel('Years after publication')
 
-# <markdowncell>
 
 # Average 'last year used' and 'future_gss_year' vs time-gap
 # --
 
-# <codecell>
+# In[43]:
 
 MAX_YEAR_USED = [np.mean(output[year]['metadata']['last_GSS_year_used']) for year in YEARS]
 FUTURE_GSS_YEAR = [np.mean(output[year]['metadata']['future_GSS_year']) for year in YEARS]
@@ -307,12 +325,13 @@ title('avg last year used, avg future year VS time-gap')
 legend()
 # savefig('../../Images/2014-10-06-avg last year used vs avg future year vs time gap.png')
 
-# <markdowncell>
 
 # #NEW CODE: Plot the *differences* 
+# 
 
-# <codecell>
+# In[27]:
 
+get_ipython().magic(u'matplotlib inline')
 # group1 = 'on_last_year_of_data'
 # group2 = 'on_future_year'    
 
@@ -349,8 +368,8 @@ outcomes_ordered = ['propSig', 'propSig_CentralVars',
 for i, outcome in enumerate(outcomes_ordered):
     
     yearlyDiffs = [np.array(output[year][group2][outcome]) - np.array(output[year][group1][outcome]) for year in YEARS]  
-    yerr = [2*np.std(x)/np.sqrt(len(x)) for x in yearlyDiffs]
-    means = [np.mean(x) for x in yearlyDiffs]
+    yerr = [2*nanstd(x)/np.sqrt(len(x)) for x in yearlyDiffs]
+    means = [nanmean(x) for x in yearlyDiffs]
     
     x, y = [], []  
     for yr in YEARS:
@@ -395,12 +414,22 @@ f.text(0.5, 1-0.05, 'Outcomes x-Years Into Future', ha='center', fontsize=20)
 
 # savefig('../../Images/9-29-2014--outcomes_last_year_vs_x_years_into_future_all_8.png')
 
-# <markdowncell>
+
+# In[25]:
+
+
+
+
+# In[23]:
+
+outcome = 'pvalues_CentralVars'
+[np.mean(np.array(output[year][group2][outcome]) - np.array(output[year][group1][outcome])) for year in YEARS]
+
 
 # OLD CODE: Second, plot the *differences* in outcomes between last_year_used and future_year
 # --
 
-# <codecell>
+# In[6]:
 
 # group1 = 'on_last_year_of_data'
 # group2 = 'on_future_year'    
@@ -483,7 +512,6 @@ f.text(0.5, 1-0.05, 'Outcomes x-Years Into Future', ha='center', fontsize=20)
 
 # savefig('../../Images/9-29-2014--outcomes_last_year_vs_x_years_into_future_all_8.png')
 
-# <markdowncell>
 
 # Robustness check
 # --
@@ -497,8 +525,9 @@ f.text(0.5, 1-0.05, 'Outcomes x-Years Into Future', ha='center', fontsize=20)
 # Outcome
 # --
 # All outcomes are still p < 0.05 (!!!) except the time-trends in p-values, which are not p > 0.05. 
+# 
 
-# <codecell>
+# In[60]:
 
 # group1 = 'on_last_year_of_data'
 # group2 = 'on_future_year'    
@@ -538,8 +567,7 @@ for i, outcome in enumerate(outcomes_ordered):
     article_indices = []
     
     for yr in YEARS:
-        yearlyDiffs = np.array(output[yr][group2][outcome]) - \
-                                np.array(output[yr][group1][outcome])  
+        yearlyDiffs = np.array(output[yr][group2][outcome]) -                                 np.array(output[yr][group1][outcome])  
         x.extend([yr]*len(yearlyDiffs))
         y.extend(yearlyDiffs)
         means.append(np.mean(yearlyDiffs))
@@ -569,9 +597,7 @@ for i, outcome in enumerate(outcomes_ordered):
     # add regression line
     formula = outcome+'~years'
 #     result = smf.rlm(formula, data=pd.DataFrame({'years':x, outcome:y}).dropna(axis=0), missing='drop').fit()
-    result = smf.ols(formula, data=pd.DataFrame({'years':x, outcome:y}).dropna(axis=0), \
-                     missing='drop').fit(cov_type='cluster', \
-                                         cov_kwds=dict(groups=article_indices))
+    result = smf.ols(formula, data=pd.DataFrame({'years':x, outcome:y}).dropna(axis=0),                      missing='drop').fit(cov_type='cluster',                                          cov_kwds=dict(groups=article_indices))
     
     axarr[i].plot(YEARS, np.array(YEARS)*result.params[1] + result.params[0], 'r--')
 
@@ -584,10 +610,7 @@ for i, outcome in enumerate(outcomes_ordered):
     
 
     # add the slope and its p-value
-    axarr[i].annotate('slope=' + str(np.around(result.params[1],4))+ \
-                      ', p=' + str(np.around(result.pvalues[1],3)), \
-                      xy=(0, 0), xycoords='axes fraction', fontsize=12, ha='left', va='bottom', \
-                      xytext=(5,5), textcoords='offset points')
+    axarr[i].annotate('slope=' + str(np.around(result.params[1],4))+                       ', p=' + str(np.around(result.pvalues[1],3)),                       xy=(0, 0), xycoords='axes fraction', fontsize=12, ha='left', va='bottom',                       xytext=(5,5), textcoords='offset points')
     
     # print the intercept and its p-value for my inspection, not on the figure
     print 'intercept:'+str(result.params[0])+', '+str(result.pvalues[0])    

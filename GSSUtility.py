@@ -1,7 +1,7 @@
 
 # coding: utf-8
 
-# In[138]:
+# In[1]:
 
 if __name__ == '__main__':
     #########
@@ -24,9 +24,9 @@ if __name__ == '__main__':
     dump(df_vartypes.to_dict(), open(pathToData + 'variableTypes.pickle', 'wb'))
 
 
-# In[137]:
+# In[10]:
 
-"""
+'''
 Created on Wed Apr 02, 2014
 @author: Misha
 
@@ -41,7 +41,7 @@ This file contains classes and functions that are commonly used in all analyses.
 
 The classes are articleClass, dataContainer
 
-"""
+'''
 # from __future__ import division
 import cPickle as cp
 import pandas as pd
@@ -57,8 +57,12 @@ from GSSUtility import *
 from cPickle import load, dump
 import random # note, scipy.random.choice doesn't work even though it ought to be the same function!!!
 import rpy2.robjects as robjects
+from rpy2.robjects import pandas2ri
+pandas2ri.activate()
+from rpy2.robjects import StrVector
+import rpy2
 import pandas.rpy.common as com
-import re
+
 
 GSS_YEARS = [1972, 1973, 1974, 1975, 1976, 1977, 1978, 
             1980, 1982, 1983, 1984, 1985, 1986, 1987, 1988, 1989, 
@@ -104,7 +108,8 @@ class dataContainer:
     articleClasses = []
     df = None
     r = None
-    amelia = None
+    mice = None
+    complete = None
     
     def __init__(self, pathToData='../../Data/'):
         
@@ -112,8 +117,9 @@ class dataContainer:
         self.r = robjects.r
         
         from rpy2.robjects.packages import importr
-        importr('Amelia')
-        self.amelia = self.r['amelia']
+        importr('mice')
+        self.mice = self.r['mice']
+        self.complete = self.r['complete']
         
         self.dictOfVariableGroups = load(open(pathToData + 'dictOfVariableGroups.pickle'))
         self.variableTypes = load(open(pathToData + 'variableTypes.pickle'))
@@ -196,7 +202,7 @@ def removeConstantColumns(design):
     
     return design
     
-def createFormula(dataCont, design):
+def createFormula(dataCont, design, return_nominals=False):
     '''
     Takes the design matrix (where first column is DV)
     and creates a formula for Pandas/Statsmodels using the dict of variableTypes,
@@ -206,10 +212,12 @@ def createFormula(dataCont, design):
         C = continuous, CL = continuous-like (no difference betw. this and "C")
         number = categorical, where number is the number of levels
         DONOTUSE = would need to go back to the spreadsheet file to see where I used this code (probably for things with many, many levels)
-        
+       
+    return_nominals: default=False
+        if True, returns a list of variables that are nominal (=categorical); doesn't return the formula
     '''
     
-#     print design.columns
+    nominals = []
     
     # LHS (left-hand side)
     # check to make sure the DV is not 'DONOTUSE' or a categorical
@@ -240,7 +248,9 @@ def createFormula(dataCont, design):
             elif type(varType) == int:
                 if varType > 15: # if >15 levels
                     print 'categorical variable %s has more than 15 levels' % col
-                else: formula += 'C('+ col + ') + '        
+                else: 
+                    formula += 'C('+ col + ') + '        
+                    nominals.append(col)
                 continue
         
         # all other cases (not in dict, in dict but C or CL), treat it as continuous
@@ -251,13 +261,38 @@ def createFormula(dataCont, design):
     
 #     print 'IVs count=', design.shape[1]-1, 'fomula is:', formula
     
-    if '~' not in formula: return None # no suitable IVs added to formula
-    else: return formula
+    if '~' not in formula: 
+        print 'Couldnt construct formula:', formula
+        return None # no suitable IVs added to formula
+    else: 
+        if return_nominals==True: return nominals
+        else: return formula
     
+def independent_columns(A, tol = 1e-02):
+    """
+    Return an array composed of independent columns of A.
+
+    Note the answer may not be unique; this function returns one of many
+    possible answers.
+
+    http://stackoverflow.com/q/13312498/190597 (user1812712)
+    http://math.stackexchange.com/a/199132/1140 (Gerry Myerson)
+    http://mail.scipy.org/pipermail/numpy-discussion/2008-November/038705.html
+        (Anne Archibald)"""
+    Q, R = np.linalg.qr(A.dropna())
+    independent = np.where(np.abs(R.diagonal()) > tol)[0]
+    return A.iloc[:, independent]
+
+def matrixrank(A,tol=1e-2):
+    """
+    http://mail.scipy.org/pipermail/numpy-discussion/2008-February/031218.html
+    """
+    s = np.linalg.svd(A,compute_uv=0)
+    return sum( np.where( s>tol, 1, 0 ) )
+
 def runModel(dataCont, year, DV, IVs, controls=[]):
     '''
-    TODO: USE np.corrcoef(matrix) TO FIGURE OUT WHICH VARIABLES ARE COLLINEAR SO THAT I CAN DROP SOME OF THEM
-    
+    TODO: USE np.corrcoef(matrix) TO FIGURE OUT WHICH VARIABLES ARE COLLINEAR SO THAT I C
     inputs:
       - the year of GSS to use
       - Dependent Variable (just 1)
@@ -269,7 +304,7 @@ def runModel(dataCont, year, DV, IVs, controls=[]):
     '''   
     design = df.loc[year, [DV] + IVs + controls]
     design = design.astype(float) # again because R messes up for ints
-#     design.index = range(len(design)) # using R for imputation messes up when the index is all the same values (year)
+    design.index = range(len(design)) # using R for imputation messes up when the index is all the same values (year)
     
     # gonna cut off the following from the line above.. shouldn't need it:
     #.copy(deep=True)  # Need to make a deep copy so that original df isn't changed
@@ -279,19 +314,25 @@ def runModel(dataCont, year, DV, IVs, controls=[]):
     design = removeConstantColumns(design) 
 
     # create formula, and from here figure out what variables are categorical for the next step (imputation)    
-    formula = createFormula(dataCont, design)
-    if not formula: 
-        print 'Couldnt construct a suitable formula'
-        return None
-    
+#     nominals = createFormula(dataCont, design, return_nominals=True)
+      
     # IMPUTE MISSING VALUES
-    # We will use R's "" module to imput missing values
-    try:
-        imputed = dataCont.amelia(com.convert_to_r_dataframe(design), m = 1, boot_type = "none")
-    except:
-        print 'Error during imptation. Maybe colinearity?'
-        return None
-    design = com.convert_robj(imputed.rx2('imputations').rx2('imp1'))    
+#     try:
+#         design.iloc[:,:] = com.convert_robj(dataCont.complete(dataCont.mice(design.values, m=1))).values
+#         print 'imputing worked fine'
+#     except:
+#         print 'imputing didnt work'
+#         print year, DV, IVs
+#         nominals = createFormula(dataCont, design, return_nominals=True)
+#         non_nominals = set(design.columns) - set(nominals)
+#         design[non_nominals] = design[non_nominals].fillna(design[non_nominals].mean()) # the naive way
+#         design[nominals] = design[nominals].fillna(design[nominals].mode())
+    design2 = design.fillna(design.mean())
+    
+#     KEEP ONLY NON-COLLINEAR COLUMNS
+    design = independent_columns(design2)
+    if design2.shape[1] != design.shape[1]:
+        print 'Ind columns test. Before:', design2.columns, design2.shape[1], ' After:', design.columns, design.shape[1]
     
     # if the line above removed DV column, then can't use this model, return None
     if design is None or DV not in design: 
@@ -307,17 +348,24 @@ def runModel(dataCont, year, DV, IVs, controls=[]):
     if design.shape[0] < design.shape[1]: # if number of rows is less than number of columns
         print 'Not enough observations. Skipping...'
         return None
+
+    # create formula
+    formula = createFormula(dataCont, design)
+    if not formula: 
+        print 'Couldnt construct a suitable formula'
+        return None
     
     # calculate the results   
     try:
-        results = smf.ols(formula, data=design, missing='drop').fit() # do I need the missing='drop' part?
+        results = smf.ols(formula, data=design.dropna()).fit() # do I need the missing='drop' part?
     except:
         print 'Error running model'
         return None
     
     # QUALITY CHECK!!!: a check on abnormal results
-    if (abs(results.params) > 5).any() or results.rsquared > 0.98:
+    if (abs(results.params) > 10).any() or results.rsquared > 0.98:
         print 'Either the  params or the R^2 is too high. Skipping.'
+        print formula
         return None
         # raise <--- NEED TO THINK THROUGH WHAT TO DO HERE...
         # Reasons this case may come up:

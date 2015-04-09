@@ -14,13 +14,13 @@
 # @author: Misha
 # 
 
-# In[47]:
+# In[2]:
 
-get_ipython().magic(u'matplotlib inline')
+from __future__ import division
+# %matplotlib inline
 
 import matplotlib.pyplot as plt
 
-from __future__ import division
 import pandas as pd
 #import cPickle as cp
 
@@ -39,13 +39,13 @@ from collections import defaultdict
 import seaborn
 
 
-# In[36]:
+# In[3]:
 
 get_ipython().magic(u'rm ../GSSUtility.pyc # remove this file because otherwise it will be used instead of the updated .py file')
 reload(GU)
 
 
-# In[37]:
+# In[ ]:
 
 #*********************************************************
 allPropsForYearsUsed = []
@@ -76,13 +76,13 @@ if __name__ == "__main__":
     for group in groups:
         for outcome in outcomes:
             output[group][outcome] = []
-            
-           
-    for article in random.sample(articlesToUse, 50):
-#     for article in articlesToUse:
+    
+#     log=open('log_file.txt', 'w')       
+#     for article in random.sample(articlesToUse, 200):
+    for article in articlesToUse:
     #for article in [a for a in articlesToUse if a.articleID == 6755]:
     
-        print 'Processing article:', article.articleID
+        print '\n===================\nProcessing article:', article.articleID
         
         RHS = article.IVs + article.controls
         
@@ -92,8 +92,12 @@ if __name__ == "__main__":
             futureYearsPossible = [yr for yr in article.GSSYearsPossible if yr > maxYearUsed]
             nextYear = min(futureYearsPossible) # the arguments of GU.filterArticles function ensure that there is a suitable future year (within bound)
             
+#             log.write('id'+str(article.articleID)+' year '+str(maxYearUsed))
+            
             resOnDataUsed = GU.runModel(dataCont, maxYearUsed, DV, RHS) # models run on max year of data used
             if not resOnDataUsed: continue
+            
+#             log.write('id'+str(article.articleID)+' year '+str(nextYear))           
             resOnNextYear = GU.runModel(dataCont, nextYear, DV, RHS) # models run on min year of future data
             if not resOnNextYear: continue
             
@@ -142,11 +146,15 @@ if __name__ == "__main__":
                 output[groups[i]]['pvalues'].append(np.mean( results[i].pvalues[1:]))
                 output[groups[i]]['numTotal'].append( 1 ) #divide by len of R^2 array to get a mean of variables estimated PER model                           
                 
-#                 if len(centralVars)>0:
-                output[groups[i]]['pvalues_CentralVars'].append(np.mean(results[i].pvalues[centralVars]))               
-                output[groups[i]]['propSig_CentralVars'].append(float(len([p for p in results[i].pvalues[centralVars] if p < 0.05]))                                                         /len(results[i].params[centralVars])) 
-                output[groups[i]]['paramSizesNormed_CentralVars'].append(np.mean(results[i].params[centralVars].abs()))                
-        
+                if len(centralVars)>0:
+                    output[groups[i]]['pvalues_CentralVars'].append(np.mean(results[i].pvalues[centralVars]))               
+                    output[groups[i]]['propSig_CentralVars'].append(float(len([p for p in results[i].pvalues[centralVars] if p < 0.05]))                                                             /len(results[i].params[centralVars])) 
+                    output[groups[i]]['paramSizesNormed_CentralVars'].append(np.mean(results[i].params[centralVars].abs()))                
+                else:
+                    output[groups[i]]['pvalues_CentralVars'].append(np.nan)
+                    output[groups[i]]['propSig_CentralVars'].append(np.nan)
+                    output[groups[i]]['paramSizesNormed_CentralVars'].append(np.nan)
+                    
             output['metadata']['article_id'].append(article.articleID)                 
      
    
@@ -159,7 +167,7 @@ if __name__ == "__main__":
 # Create dataframe that contains the output 
 # --
 
-# In[39]:
+# In[4]:
 
 df_output = pd.DataFrame(index=np.arange(len(output[group1]['propSig'])), columns=pd.MultiIndex.from_product([groups, outcomes]))
 df_output.columns.names = ['outcome','group']
@@ -169,26 +177,41 @@ for outcome in outcomes:
 df_output['article_id'] = output['metadata']['article_id']
 del df_output[group1, 'numTotal']
 del df_output[group2, 'numTotal']
+
+df_output.to_pickle('df_output.pickle')
 # df_output
 
 
-# In[40]:
+# In[22]:
+
+# if using another, non-ipython notebook method of running the code
+# load in the output of that other method, and set up the relevant variables
+df_output = pd.read_pickle('df_output.pickle')
+group1 = 'on last GSS year'
+group2 = 'on first "future" GSS year'   
+groups = [group1, group2]
+outcomes = ['propSig', 'paramSizesNormed', 'Rs', 'adjRs', 'pvalues',  'numTotal',             'propSig_CentralVars', 'paramSizesNormed_CentralVars', 'pvalues_CentralVars']
+df_output.head()
+
+
+# In[23]:
 
 outcomes.remove('numTotal')
 
 
 # ###Number of unique articles used
 
-# In[41]:
+# In[24]:
 
-len(df_output['article_id'].unique())
+print 'Number of unique articles used:', len(df_output['article_id'].unique())
 
 
 # Plot the output
 # --
 
-# In[46]:
+# In[25]:
 
+get_ipython().magic(u'matplotlib inline')
 outcomesToUse = df_output[group1].columns
 indices = np.arange(len(outcomesToUse))
 width = 0.35
@@ -229,15 +252,28 @@ autolabel(rects1)
 
 # In[ ]:
 
-# (df_output['adjRs','orig. models'] - df_output['adjRs','cognate models']).plot(kind='kde')
+# import rpy2.robjects as robjects
+# import pandas.rpy.common as com
+# from rpy2.robjects import pandas2ri
+# pandas2ri.activate()
+# r = robjects.r
 
-from scipy.stats import ttest_1samp
-for outcome in outcomes:
-    print outcome
-    print 'mean group 1', df_output[group1, outcome].mean()
-    print 'mean group 2', df_output[group2, outcome].mean()
-    print ttest_rel(df_output[group1, outcome], df_output[group2, outcome])[1]
-    print
+# article = articlesToUse[10]
+# mydf = dataCont.df.loc[1974, article.DVs+article.IVs]
+# mydf.head()
+
+
+# In[16]:
+
+# # (df_output['adjRs','orig. models'] - df_output['adjRs','cognate models']).plot(kind='kde')
+
+# from scipy.stats import ttest_1samp
+# for outcome in outcomes:
+#     print outcome
+#     print 'mean group 1', df_output[group1, outcome].mean()
+#     print 'mean group 2', df_output[group2, outcome].mean()
+#     print ttest_rel(df_output[group1, outcome], df_output[group2, outcome])[1]
+#     print
 
 
 # Perform t-tests and Tests using *clustered errors*
@@ -263,7 +299,7 @@ for outcome in outcomes:
 # The p-values are larger (for some outcomes, they are now > 0.05) but are still sufficiently small?
 # 
 
-# In[ ]:
+# In[17]:
 
 # (df_output['adjRs','orig. models'] - df_output['adjRs','cognate models']).plot(kind='kde')
 
@@ -315,12 +351,12 @@ for outcome in outcomes:
 
 # In[ ]:
 
-# need to see tally up how switched from being below to being above
-# i.e. need to condition on being below beforehand, and how many of those are above now
+# # need to see tally up how switched from being below to being above
+# # i.e. need to condition on being below beforehand, and how many of those are above now
 
-print 'count:', df_output[group2]['pvalues'][df_output[group2]['pvalues'] > 0.05].shape[0]
-print 'total:', df_output.shape[0]
-print 'percent:', df_output[]['pvalues'][df_output['cognate models']['pvalues'] > 0.05].shape[0]/ df_output.shape[0]
+# print 'count:', df_output[group2]['pvalues'][df_output[group2]['pvalues'] > 0.05].shape[0]
+# print 'total:', df_output.shape[0]
+# print 'percent:', df_output[]['pvalues'][df_output['cognate models']['pvalues'] > 0.05].shape[0]/ df_output.shape[0]
 
 
 # In[ ]:
