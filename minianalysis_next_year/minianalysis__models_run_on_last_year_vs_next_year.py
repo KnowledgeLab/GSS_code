@@ -14,7 +14,7 @@
 # @author: Misha
 # 
 
-# In[2]:
+# In[1]:
 
 from __future__ import division
 # %matplotlib inline
@@ -36,16 +36,20 @@ import time
 from collections import Counter
 from collections import defaultdict
 
-import seaborn
+import seaborn as sb
+custom_style = {'axes.facecolor': 'white',
+                'grid.color': '0.15',
+                'grid.linestyle':'-.'}
+sb.set_style("darkgrid", rc=custom_style)
 
 
-# In[3]:
+# In[2]:
 
 get_ipython().magic(u'rm ../GSSUtility.pyc # remove this file because otherwise it will be used instead of the updated .py file')
 reload(GU)
 
 
-# In[ ]:
+# In[3]:
 
 #*********************************************************
 allPropsForYearsUsed = []
@@ -182,7 +186,7 @@ df_output.to_pickle('df_output.pickle')
 # df_output
 
 
-# In[22]:
+# In[45]:
 
 # if using another, non-ipython notebook method of running the code
 # load in the output of that other method, and set up the relevant variables
@@ -194,14 +198,14 @@ outcomes = ['propSig', 'paramSizesNormed', 'Rs', 'adjRs', 'pvalues',  'numTotal'
 df_output.head()
 
 
-# In[23]:
+# In[46]:
 
 outcomes.remove('numTotal')
 
 
 # ###Number of unique articles used
 
-# In[24]:
+# In[47]:
 
 print 'Number of unique articles used:', len(df_output['article_id'].unique())
 
@@ -209,7 +213,7 @@ print 'Number of unique articles used:', len(df_output['article_id'].unique())
 # Plot the output
 # --
 
-# In[25]:
+# In[48]:
 
 get_ipython().magic(u'matplotlib inline')
 outcomesToUse = df_output[group1].columns

@@ -1,11 +1,11 @@
-# -*- coding: utf-8 -*-
-# <nbformat>3.0</nbformat>
 
-# <markdowncell>
+# coding: utf-8
 
-# filename: cognateVariablesAnalysis.py
+# In[37]:
+
+# filename: minianalysis__cognate_variables.py
 # 
-# description: Runs models as specified originally and again after replacing a central variable by a cognate var.
+# description: Runs models as specified originally and again after replacing a central variable by a cognate variable.
 # It compares regressions on what was then the new data vs same regressions on future waves
 # 
 # inputs:
@@ -15,9 +15,10 @@
 # @author: Misha
 # 
 
-# <codecell>
-
 from __future__ import division
+
+import matplotlib.pyplot as plt
+
 import pandas as pd
 #import cPickle as cp
 
@@ -33,17 +34,20 @@ import time
 from collections import Counter
 from collections import defaultdict
 
-# <codecell>
-
 import seaborn as sb
 custom_style = {'axes.facecolor': 'white',
                 'grid.color': '0.15',
                 'grid.linestyle':'-.'}
 sb.set_style("darkgrid", rc=custom_style)
 
-# <codecell>
 
-# TO DO: TRY MEDIAN INSTEAD OF MEAN FOR PERCENT OF CENTRAL VARS STAT SIGN.
+# In[38]:
+
+get_ipython().magic(u'rm ../GSSUtility.pyc # remove this file because otherwise it will be used instead of the updated .py file')
+reload(GU)
+
+
+# In[3]:
 
 if __name__ == "__main__":    
     
@@ -60,8 +64,7 @@ if __name__ == "__main__":
     group1 = 'original model'
     group2 = 'cognate model'   
     groups = [group1, group2]
-    outcomes = ['propSig', 'paramSizesNormed', 'Rs', 'adjRs', 'pvalues',  'numTotal', \
-                'propSig_CentralVars', 'paramSizesNormed_CentralVars', 'pvalues_CentralVars']
+    outcomes = ['propSig', 'paramSizesNormed', 'Rs', 'adjRs', 'pvalues',  'numTotal',                 'propSig_CentralVars', 'paramSizesNormed_CentralVars', 'pvalues_CentralVars']
     output = defaultdict(dict)
     output['metadata'] = {'article_id':[]}
     for group in groups:
@@ -69,9 +72,9 @@ if __name__ == "__main__":
             output[group][outcome] = []
             
     
-    articlesToUse = GU.filterArticles(dataCont.articleClasses, GSSYearsUsed=True, GSSYearsPossible=False, centralIVs=True) #, 
-    print len(articlesToUse)
-#                                         linearModels=True)            
+    articlesToUse = GU.filterArticles(dataCont.articleClasses, GSSYearsUsed=True, GSSYearsPossible=False,                                       centralIVs=True, linearModels=True) 
+    print 'Articles to use:', len(articlesToUse)
+
 #     for article in random.sample(articlesToUse, 200):
     for article in articlesToUse:
     #for article in [a for a in articleClasses if a.articleID == 6755]:
@@ -165,8 +168,7 @@ if __name__ == "__main__":
 
                     if len(centralVars)>0:
                         output[groups[i]]['pvalues_CentralVars'].append(np.mean(results[i].pvalues[centralVars]))               
-                        output[groups[i]]['propSig_CentralVars'].append(float(len([p for p in results[i].pvalues[centralVars] if p < 0.05])) \
-                                                                /len(results[i].params[centralVars])) 
+                        output[groups[i]]['propSig_CentralVars'].append(float(len([p for p in results[i].pvalues[centralVars] if p < 0.05]))                                                                 /len(results[i].params[centralVars])) 
                         output[groups[i]]['paramSizesNormed_CentralVars'].append(np.mean(results[i].params[centralVars].abs()))                
                     else:
                         output[groups[i]]['pvalues_CentralVars'].append(nan)               
@@ -233,9 +235,20 @@ if __name__ == "__main__":
 # Create a Pandas DataFrame of the output
 # --
 
-# <codecell>
 
-df_output = pd.DataFrame(index=arange(len(output[group1]['propSig'])), columns=pd.MultiIndex.from_product([groups, outcomes]))
+# In[39]:
+
+import pickle
+group1 = 'original model'
+group2 = 'cognate model'   
+groups = [group1, group2]
+outcomes = ['propSig', 'paramSizesNormed', 'Rs', 'adjRs', 'pvalues',  'numTotal',             'propSig_CentralVars', 'paramSizesNormed_CentralVars', 'pvalues_CentralVars']
+output = pickle.load(open('output.pickle'))
+
+
+# In[40]:
+
+df_output = pd.DataFrame(index=np.arange(len(output[group1]['propSig'])), columns=pd.MultiIndex.from_product([groups, outcomes]))
 df_output.columns.names = ['outcome','group']
 for outcome in outcomes:
     for gp in groups:
@@ -244,11 +257,14 @@ df_output.index = output['metadata']['article_id']
 del df_output[group1, 'numTotal']
 del df_output[group2, 'numTotal']
 print 'Using %f models from %f articles' % (len(df_output), len(df_output.index.unique()))
+df_output.to_pickle('df_output.pickle')
 
-# <markdowncell>
 
+# In[41]:
+
+get_ipython().magic(u'matplotlib inline')
 # #Plot outcomes - (new) distribution of differences approach
-
+df_output = pd.read_pickle('df_output.pickle')
 # <codecell>
 
 outcomeMap = {'propSig':"% of Stat. Sign. Coeff's", 
@@ -264,16 +280,14 @@ for outcome in outcomes:
     if outcome=='article_id': continue
     if outcome=='numTotal':continue
     
-    figure(figsize=(4,4))
-    xticks(fontsize=12)
-    yticks(fontsize=15)
-    ylabel('Density', fontsize=17)
+    plt.figure(figsize=(4,4))
+    plt.xticks(fontsize=12)
+    plt.yticks(fontsize=15)
+    plt.ylabel('Density', fontsize=17)
 
-    title(outcomeMap[outcome], fontsize=20)
-    print outcome + 'Group 1, Mean: %0.3f, s.d.: %0.3f' % \
-        (df_output[group1, outcome].mean(), df_output[group1, outcome].std()/np.sqrt(len(df_output)))
-    print outcome + 'Group 2, Mean: %0.3f, s.d.: %0.3f' % \
-        (df_output[group2, outcome].mean(), df_output[group2, outcome].std()//np.sqrt(len(df_output)))
+    plt.title(outcomeMap[outcome], fontsize=20)
+    print outcome + 'Group 1, Mean: %0.3f, s.d.: %0.3f' %         (df_output[group1, outcome].mean(), df_output[group1, outcome].std()/np.sqrt(len(df_output)))
+    print outcome + 'Group 2, Mean: %0.3f, s.d.: %0.3f' %         (df_output[group2, outcome].mean(), df_output[group2, outcome].std()//np.sqrt(len(df_output)))
  
     sb.kdeplot((df_output[group1, outcome] - df_output[group2, outcome]), 
                 color='black', legend=False)
@@ -290,40 +304,42 @@ for outcome in outcomes:
 #     df_output[outcome].hist(bins=30)
 #     savefig('../../Images/descriptives--' + outcome + '.svg', bbox_inches='tight')
     
-    plot([0,0], [0,20], '--', color='black', linewidth=2)
+    plt.plot([0,0], [0,20], '--', color='black', linewidth=2)
     
 #     break
 
 # <markdowncell>
 
+
+# In[35]:
+
 # #Plot outcomes - (old) bar chart approach
 
 # <codecell>
 
-figsize(12,8)
+plt.figure(figsize=(12,8))
 outcomesToUse = df_output[group1].columns
 indices = np.arange(len(outcomesToUse))
 width = 0.35
 error_config = {'ecolor': '0.3'}
 
-axes = figure().add_subplot(111)
-rects1 = bar(left=indices, width=width, height=df_output[group1].mean(), color='0.75', 
+axes = plt.figure().add_subplot(111)
+rects1 = plt.bar(left=indices, width=width, height=df_output[group1].mean(), color='0.75', 
              yerr=df_output[group1].std()/np.sqrt(len(df_output[group1])),
              error_kw=error_config) #this is not very relevant because we're not comparing independent groups
-rects2 = bar(left=indices+width, width=width, height=df_output[group2].mean(), color='0.5', 
+rects2 = plt.bar(left=indices+width, width=width, height=df_output[group2].mean(), color='0.5', 
              yerr=df_output[group2].std()/np.sqrt(len(df_output[group2])),
              error_kw=error_config)
 
 # title, legend, etc
-title('Original vs. Cognate Models', fontsize=18)
-legend((rects1[0], rects2[0]), ('Original models', 'Cognate models'), fontsize=15)
+plt.title('Original vs. Cognate Models', fontsize=18)
+plt.legend((rects1[0], rects2[0]), ('Original models', 'Cognate models'), fontsize=15)
 # legend((rects1[0], rects2[0]), ('Original models', 'Cognate models'), fontsize=15)
-xlim((-1*width, len(outcomesToUse)))
+plt.xlim((-1*width, len(outcomesToUse)))
 
 # tick labels
 # a = outcomesToUse
-a = ['% of coeffs. stat. sign.', 'avg. coeff. size', 'R_sq.', 'adj. R_sq.', 'avg. p-value', \
-     '"central" vars: % of coeffs. stat. sign.', '"central" vars: avg. coeff. size', '"central" vars: avg. p-value']
+a = ['% of coeffs. stat. sign.', 'avg. coeff. size', 'R_sq.', 'adj. R_sq.', 'avg. p-value',      '"central" vars: % of coeffs. stat. sign.', '"central" vars: avg. coeff. size', '"central" vars: avg. p-value']
 axes.set_xticks(indices+width)
 axes.set_xticklabels(a, rotation=90, fontsize=15)
 
@@ -387,18 +403,21 @@ autolabel(rects1)
 
 # <codecell>
 
-figsize(6,5)
-(df_output['orig. models']['paramSizesNormed'] - df_output['cognate models']['paramSizesNormed']).plot(kind='kde')
-plot([0,0], [0,20], '--')
-title('Differences in Stand. Coeff. Size. between orig. and cognate')
+plt.figure(figsize=(6,5))
+(df_output[group1]['paramSizesNormed'] - df_output[group2]['paramSizesNormed']).plot(kind='kde')
+plt.plot([0,0], [0,20], '--')
+plt.title('Differences in Stand. Coeff. Size. between orig. and cognate')
 
 # <codecell>
 
-mn= np.mean((df_output['orig. models', 'Rs'] - df_output['cognate models', 'Rs']).values)
-sd= np.std((df_output['orig. models', 'Rs'] - df_output['cognate models', 'Rs']).values)
-print mn, sd, mn/(sd/sqrt(df_output.shape[0]))
+mn= np.mean((df_output[group1, 'Rs'] - df_output[group2, 'Rs']).values)
+sd= np.std((df_output[group1, 'Rs'] - df_output[group2, 'Rs']).values)
+print mn, sd, mn/(sd/np.sqrt(df_output.shape[0]))
 
 # <markdowncell>
+
+
+# In[31]:
 
 # Perform t-tests and Tests using *clustered errors*
 # --
@@ -450,10 +469,7 @@ for outcome in outcomes:
     # 2. Fit models
 #     result = smf.ols(formula='y~x', data=pd.DataFrame({'y':outcomes_combined, 'x':dummy})).fit() # do I need a constant???
 #     result = smf.ols(formula='y~x-1', data=pd.DataFrame({'y':diffs, 'x':[1]*len(diffs)})).fit()
-    result_clustered = smf.ols(formula='y~x-1', \
-                     data=pd.DataFrame({'y':diffs, 'x':[1]*len(diffs)})).fit(missing='drop', \
-                                                                             cov_type='cluster', \
-                                                                    cov_kwds=dict(groups=article_ids))
+    result_clustered = smf.ols(formula='y~x-1',                      data=pd.DataFrame({'y':diffs, 'x':[1]*len(diffs)})).fit(missing='drop',                                                                              cov_type='cluster',                                                                     cov_kwds=dict(groups=article_ids))
                                                                                                
 # these two methods produce slightly different results. neither is necessary because i'm using parameters
 # of the model.fit() method above instead to use clustered standard errors.
@@ -491,4 +507,14 @@ pd.MultiIndex.from_product([outcomes, ['orig. models', 'cognate models']])
 print 'count:', df_output['cognate models']['pvalues'][df_output['cognate models']['pvalues'] > 0.05].shape[0]
 print 'total:', df_output.shape[0]
 print 'percent:', df_output['cognate models']['pvalues'][df_output['cognate models']['pvalues'] > 0.05].shape[0]/ df_output.shape[0]
+
+
+# In[ ]:
+
+
+
+
+# In[ ]:
+
+
 

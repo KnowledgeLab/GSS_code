@@ -3,6 +3,8 @@
 
 # In[1]:
 
+from __future__ import division
+
 if __name__ == '__main__':
     #########
     # small script to amend the varTypes dict that stores variable types
@@ -24,14 +26,14 @@ if __name__ == '__main__':
     dump(df_vartypes.to_dict(), open(pathToData + 'variableTypes.pickle', 'wb'))
 
 
-# In[10]:
+# In[3]:
 
 '''
 Created on Wed Apr 02, 2014
-@author: Misha
+@author: Misha Teplitskiy, mishateplitskiy.com
 
 description:
-This file contains classes and functions that are commonly used in all analyses. The functions are
+This file contains classes and functions that are commonly used in all analyses of GSS project. The functions are
 
 - removeMissingValues()
 - removeConstantColumns()
@@ -40,9 +42,8 @@ This file contains classes and functions that are commonly used in all analyses.
 - createFormula()
 
 The classes are articleClass, dataContainer
-
 '''
-# from __future__ import division
+
 import cPickle as cp
 import pandas as pd
 #import sys
@@ -225,10 +226,10 @@ def createFormula(dataCont, design, return_nominals=False):
     if DV not in dataCont.variableTypes: formula = 'standardize('+ DV +', ddof=1) ~ ' 
     else:
         varType = dataCont.variableTypes[DV]
-        if varType == 'DONOTUSE':
+        if varType == 'DONOTUSE' and not return_nominals:
 #             print 'DV %s is of type DONOTUSE' % DV
             return None
-        elif type(varType) == int and varType > 2:
+        elif type(varType) == int and varType > 2 and not return_nominals:
 #             print 'DV %s is categorical with more than 2 categories' % DV
             return None
         else:
@@ -261,7 +262,7 @@ def createFormula(dataCont, design, return_nominals=False):
     
 #     print 'IVs count=', design.shape[1]-1, 'fomula is:', formula
     
-    if '~' not in formula: 
+    if '~' not in formula and not return_nominals: 
         print 'Couldnt construct formula:', formula
         return None # no suitable IVs added to formula
     else: 
@@ -291,17 +292,17 @@ def matrixrank(A,tol=1e-2):
     return sum( np.where( s>tol, 1, 0 ) )
 
 def runModel(dataCont, year, DV, IVs, controls=[]):
-    '''
-    TODO: USE np.corrcoef(matrix) TO FIGURE OUT WHICH VARIABLES ARE COLLINEAR SO THAT I C
+    '''  
     inputs:
       - the year of GSS to use
       - Dependent Variable (just 1)
       - list of independent and control variables
       
     outputs:
-      If OLS model estimation was possibely, return results data structure from statsmodels OLS. results contains methods like .summary() and .pvalues
+      if: OLS model estimation was possible, return results data structure from statsmodels OLS. 
+          results contains methods like .summary() and .pvalues
       else: return None 
-    '''   
+    '''
     design = df.loc[year, [DV] + IVs + controls]
     design = design.astype(float) # again because R messes up for ints
     design.index = range(len(design)) # using R for imputation messes up when the index is all the same values (year)
@@ -316,23 +317,36 @@ def runModel(dataCont, year, DV, IVs, controls=[]):
     # create formula, and from here figure out what variables are categorical for the next step (imputation)    
 #     nominals = createFormula(dataCont, design, return_nominals=True)
       
-    # IMPUTE MISSING VALUES
-#     try:
+    #IMPUTE MISSING VALUES
+    try:
+        
+        # MI version
+        rcode='''
+            library(mi)
+            mydf = %s
+            IMP = mi(mydf, n.imp=2, n.iter=6, max.minutes=1)
+            imp1 <- mi.data.frame(IMP, m = 1)
+            ''' % com.convert_to_r_dataframe(design).r_repr()
+        dataCont.r(rcode)
+        design = com.convert_robj(dataCont.r['imp1'])
+        
+        #MICE version
 #         design.iloc[:,:] = com.convert_robj(dataCont.complete(dataCont.mice(design.values, m=1))).values
-#         print 'imputing worked fine'
-#     except:
-#         print 'imputing didnt work'
-#         print year, DV, IVs
-#         nominals = createFormula(dataCont, design, return_nominals=True)
-#         non_nominals = set(design.columns) - set(nominals)
-#         design[non_nominals] = design[non_nominals].fillna(design[non_nominals].mean()) # the naive way
-#         design[nominals] = design[nominals].fillna(design[nominals].mode())
-    design2 = design.fillna(design.mean())
+        
+        print 'imputing worked fine'
+    except:
+        print 'imputing didnt work'
+        print year, DV, IVs
+        nominals = createFormula(dataCont, design, return_nominals=True)
+        non_nominals = list(set(design.columns) - set(nominals)) # list because sets are unhashable and cant be used for indices
+        if len(non_nominals)>0: 
+            design[non_nominals] = design[non_nominals].fillna(design[non_nominals].mean()) # the naive way
+        if len(nominals)>0:
+            design[nominals] = design[nominals].fillna(design[nominals].mode())
+#     design2 = design.fillna(design.median())
     
 #     KEEP ONLY NON-COLLINEAR COLUMNS
-    design = independent_columns(design2)
-    if design2.shape[1] != design.shape[1]:
-        print 'Ind columns test. Before:', design2.columns, design2.shape[1], ' After:', design.columns, design.shape[1]
+    design = independent_columns(design)
     
     # if the line above removed DV column, then can't use this model, return None
     if design is None or DV not in design: 
@@ -370,8 +384,7 @@ def runModel(dataCont, year, DV, IVs, controls=[]):
         # raise <--- NEED TO THINK THROUGH WHAT TO DO HERE...
         # Reasons this case may come up:
         # 1. The formula has very related variables in it: 'DENOM ~ DENOM16', and correlation was 1.0                
-        # 2. The variation in DV is huge ('OTHER' [religious affiliation] or 'OCC' [occupational status]) while 
-        # variation in IV is much smaller. Wait, I should standardize DV too??? Tryingt this now.
+        # 2. Seems to happen even with less extreme collinearity
 
     if np.isnan(results.params).any():
         raise                
@@ -412,7 +425,7 @@ def filterArticles(articleClasses, GSSYearsUsed=True, GSSYearsPossible=False, un
         gssCentral = cp.load(open(pathToData + 'ARTICLEID_GSS_CENTRAL_VARIABLE.pickle', 'rb'))
 
     if linearModels:
-        modelUsed = cp.load(open(pathToData + 'ARTICLEID_AND_TRUE_IF_LINEAR_NONLINEAR.pickle', 'rb'))
+        modelUsed = pd.read_pickle(pathToData + 'ARTICLEID_AND_TRUE_IF_LINEAR_NONLINEAR.pickle')
 
     for ind, a in enumerate(articleClasses):  # a = article
         

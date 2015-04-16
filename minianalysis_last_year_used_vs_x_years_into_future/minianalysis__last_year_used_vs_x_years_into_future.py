@@ -19,7 +19,7 @@
 # 
 # """
 
-# In[26]:
+# In[57]:
 
 from __future__ import division
 
@@ -41,7 +41,12 @@ import time
 from collections import Counter
 from collections import defaultdict
 
-import seaborn
+import seaborn as sb
+custom_style = {'axes.facecolor': 'white',
+                'grid.color': '0.15',
+                'grid.alpha':'0.5',
+                'grid.linestyle':'-.'}
+sb.set_style("darkgrid", rc=custom_style)
 
 
 # In[3]:
@@ -57,7 +62,7 @@ if __name__ == "__main__":
     pathToData = '../../Data/'
     dataCont = GU.dataContainer(pathToData)
     
-    articlesToUse = GU.filterArticles(dataCont.articleClasses, GSSYearsUsed=True, GSSYearsPossible=True, centralIVs=True)            
+    articlesToUse = GU.filterArticles(dataCont.articleClasses, GSSYearsUsed=True, GSSYearsPossible=True, centralIVs=False,                                      linearModels=True)            
     print 'len of articleClasses:', len(articlesToUse)
 #     raw_input('...')
     
@@ -190,12 +195,12 @@ if __name__ == "__main__":
 pickle.dump(output, open('output.pickle', 'w'))
 
 
-# In[28]:
+# In[58]:
 
 output = pickle.load(open('output.pickle'))
 
 
-# In[29]:
+# In[59]:
 
 # info on the articles used
 all_articles = []
@@ -204,7 +209,7 @@ for yr in range(43):
 print 'Num of unique articles used:', len(set(all_articles))
 
 
-# In[13]:
+# In[60]:
 
 output[0]['metadata']['articleID']
 
@@ -222,7 +227,7 @@ output[0]['metadata']['articleID']
 # First, plot the actual outcomes (not *differences*)
 # --
 
-# In[16]:
+# In[61]:
 
 get_ipython().magic(u'matplotlib inline')
 # group1 = 'on_last_year_of_data'
@@ -329,7 +334,7 @@ legend()
 # #NEW CODE: Plot the *differences* 
 # 
 
-# In[27]:
+# In[62]:
 
 get_ipython().magic(u'matplotlib inline')
 # group1 = 'on_last_year_of_data'
@@ -368,7 +373,7 @@ outcomes_ordered = ['propSig', 'propSig_CentralVars',
 for i, outcome in enumerate(outcomes_ordered):
     
     yearlyDiffs = [np.array(output[year][group2][outcome]) - np.array(output[year][group1][outcome]) for year in YEARS]  
-    yerr = [2*nanstd(x)/np.sqrt(len(x)) for x in yearlyDiffs]
+    yerr = [nanstd(x)/np.sqrt(len(x)) for x in yearlyDiffs]
     means = [nanmean(x) for x in yearlyDiffs]
     
     x, y = [], []  
@@ -392,6 +397,8 @@ for i, outcome in enumerate(outcomes_ordered):
 #     ylabel('Change in ' + outcomeMap[outcome])
 
     axarr[i].plot(YEARS, means, '.')
+    axarr[i].errorbar(YEARS, means, yerr=yerr, linestyle='None', alpha=0.5, color='gray')
+    
     axarr[i].set_title(outcomeMap[outcome], fontsize=14)
     
     # add regression line
@@ -401,29 +408,19 @@ for i, outcome in enumerate(outcomes_ordered):
     axarr[i].plot(YEARS, np.array(YEARS)*result.params[1] + result.params[0], 'r--')
 
     # add the slope and its p-value
-    axarr[i].annotate('slope=' + str(np.around(result.params[1],4))+ ', p=' + str(np.around(result.pvalues[1],3)), 
+    axarr[i].annotate('slope=' + str(np.around(result.params[1],4))+ ', p=' + str(np.around(result.pvalues[1],4)), 
                       xy=(0, 0), xycoords='axes fraction', fontsize=12, ha='left', va='bottom', 
                       xytext=(5,5), textcoords='offset points')
     
     # print the intercept and its p-value for my inspection, not on the figure
     print 'intercept:'+str(result.params[0])+', '+str(result.pvalues[0])
-
+    axarr[i].grid(alpha=0.5)
+    
 # add title and common x-label
 f.text(0.5, 0.05, 'Years after publication', ha='center',  va='bottom',fontsize=14)
 f.text(0.5, 1-0.05, 'Outcomes x-Years Into Future', ha='center', fontsize=20)
 
 # savefig('../../Images/9-29-2014--outcomes_last_year_vs_x_years_into_future_all_8.png')
-
-
-# In[25]:
-
-
-
-
-# In[23]:
-
-outcome = 'pvalues_CentralVars'
-[np.mean(np.array(output[year][group2][outcome]) - np.array(output[year][group1][outcome])) for year in YEARS]
 
 
 # OLD CODE: Second, plot the *differences* in outcomes between last_year_used and future_year
