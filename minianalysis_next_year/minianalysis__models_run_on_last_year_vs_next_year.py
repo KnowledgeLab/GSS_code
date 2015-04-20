@@ -14,7 +14,7 @@
 # @author: Misha
 # 
 
-# In[1]:
+# In[4]:
 
 from __future__ import division
 # %matplotlib inline
@@ -186,7 +186,7 @@ df_output.to_pickle('df_output.pickle')
 # df_output
 
 
-# In[45]:
+# In[5]:
 
 # if using another, non-ipython notebook method of running the code
 # load in the output of that other method, and set up the relevant variables
@@ -198,14 +198,14 @@ outcomes = ['propSig', 'paramSizesNormed', 'Rs', 'adjRs', 'pvalues',  'numTotal'
 df_output.head()
 
 
-# In[46]:
+# In[6]:
 
 outcomes.remove('numTotal')
 
 
 # ###Number of unique articles used
 
-# In[47]:
+# In[7]:
 
 print 'Number of unique articles used:', len(df_output['article_id'].unique())
 
@@ -213,7 +213,7 @@ print 'Number of unique articles used:', len(df_output['article_id'].unique())
 # Plot the output
 # --
 
-# In[48]:
+# In[8]:
 
 get_ipython().magic(u'matplotlib inline')
 outcomesToUse = df_output[group1].columns

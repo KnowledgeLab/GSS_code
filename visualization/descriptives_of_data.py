@@ -1,7 +1,5 @@
-# -*- coding: utf-8 -*-
-# <nbformat>3.0</nbformat>
 
-# <markdowncell>
+# coding: utf-8
 
 # # Descriptives for GSS Reproducibility Project
 # 
@@ -113,7 +111,7 @@
 # --
 # These are responses to the survey about each variable (in each article)
 
-# <codecell>
+# In[4]:
 
 import pandas as pd
 import cPickle as cp
@@ -124,50 +122,55 @@ import seaborn as sns
 import MySQLdb
 from random import sample # numpy has its own np.random.sample which works differently and overwrites "random.sample"
 
-# <codecell>
+
+# In[5]:
 
 custom_style = {'axes.facecolor': 'white',
                 'grid.color': '0.15',
                 'grid.linestyle':'-.'}
 sns.set_style("darkgrid", rc=custom_style)
 
-# <codecell>
 
-db = MySQLdb.connect(host='54.187.104.183', user='mteplitskiy', passwd="mteplitskiy", db="lanl")
+# In[7]:
+
+# things moved to '  mysql -h 'klab.c3se0dtaabmj.us-west-2.rds.amazonaws.com'   -u mteplitskiy -p' per email with W. Catino 2015-02-09
+db = MySQLdb.connect(host='klab.c3se0dtaabmj.us-west-2.rds.amazonaws.com', user='mteplitskiy', passwd="mteplitskiy", db="lanl")
 c = db.cursor()
 
-# <codecell>
+
+# In[ ]:
 
 c.execute('select gss_years, year_published from gss_corpus')
 df = pd.DataFrame([el for el in c.fetchall()], columns=['gss_years_used', 'year_published'])
 
-# <codecell>
+
+# In[163]:
 
 df.year_published[df.year_published == 0] = nan
 
-# <codecell>
+
+# In[165]:
 
 df[df.year_published.notnull()].gss_years_used.value_counts()
 
-# <markdowncell>
 
 # According to he below, there seems to be a sizable number of articles published > 2005
 # --
 
-# <codecell>
+# In[6]:
 
 df[df.year_published.notnull()].groupby('year_published').count()
 
-# <codecell>
+
+# In[8]:
 
 grouped = df[df.year_published.notnull()].groupby('year_published')
 grouped.get_group(2004)
 
-# <markdowncell>
 
 # # Number of variables over time
 
-# <codecell>
+# In[13]:
 
 path_to_data = '/mnt/ide0/home/misha/GSSproject/Data/'
 articleClasses = cp.load(open(path_to_data + 'articleClasses.pickle'))
@@ -187,13 +190,12 @@ df.total = df.dvs + df.ivs + df.controls
 
 grouped = df.groupby('yearpublished')
 
-# <markdowncell>
 
 # # Number of articles per year in our data
 # 
 # Note: This is using articleClasses, which consists of only articles that survived a fair amount of filtering. 
 
-# <codecell>
+# In[14]:
 
 grouped['aid'].count().plot(style='s-')
 # legend(fontsize=15)
@@ -203,7 +205,8 @@ xlabel('Year published', fontsize=15)
 ylabel('Number of articles', fontsize=15)
 # savefig('../../images/9-4-2014--articles-per-year.jpg')
 
-# <codecell>
+
+# In[3]:
 
 
 # grouped.mean()[['dvs', 'ivs', 'controls', 'total']].plot()
@@ -220,11 +223,10 @@ xlabel('Year published', fontsize=15)
 ylabel('Variables per article', fontsize=15)
 # savefig('../../images/variables_per_article_over_time.jpg')
 
-# <markdowncell>
 
 # #Descriptives of Model Outcomes
 
-# <codecell>
+# In[159]:
 
 if __name__ == "__main__":    
     
@@ -236,8 +238,7 @@ if __name__ == "__main__":
 #     raw_input('...')
     
     # define the storage containers for outputs
-    outcomes = ['propSig', 'paramSizesNormed', 'Rs', 'adjRs', 'pvalues',  'numTotal', \
-                'propSig_CentralVars', 'paramSizesNormed_CentralVars', 'pvalues_CentralVars']
+    outcomes = ['propSig', 'paramSizesNormed', 'Rs', 'adjRs', 'pvalues',  'numTotal',                 'propSig_CentralVars', 'paramSizesNormed_CentralVars', 'pvalues_CentralVars']
     output = {outcome:[] for outcome in outcomes}
     output['article_id'] = []
     
@@ -286,8 +287,7 @@ if __name__ == "__main__":
                 output['numTotal'].append( 1 ) #divide by len of R^2 array to get a mean of variables estimated PER model                           
                 if centralVars:
                     output['pvalues_CentralVars'].append(np.mean(results.pvalues[centralVars]))               
-                    output['propSig_CentralVars'].append(float(len([p for p in results.pvalues[centralVars] if p < 0.05])) \
-                                                            /len(results.params[centralVars])) 
+                    output['propSig_CentralVars'].append(float(len([p for p in results.pvalues[centralVars] if p < 0.05]))                                                             /len(results.params[centralVars])) 
                     output['paramSizesNormed_CentralVars'].append(np.mean(results.params[centralVars].abs()))                    
                 else: 
                     print 'no central variables'
@@ -297,22 +297,20 @@ if __name__ == "__main__":
                     
                 output['article_id'].append(article.articleID) 
 
-# <markdowncell>
 
 # #Create dataframe to store *output*
 
-# <codecell>
+# In[160]:
 
 df_output = pd.DataFrame(output, index=output['article_id'])
 del df_output['numTotal']
 print len(df_output)
 print len(set(df_output.index))
 
-# <markdowncell>
 
 # #Plot outcome distributions
 
-# <codecell>
+# In[156]:
 
 outcomeMap = {'propSig':"% of Stat. Sign. Coeff's", 
               'paramSizesNormed':"Standard. Size of Coeff's",

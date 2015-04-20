@@ -1,7 +1,7 @@
 
 # coding: utf-8
 
-# In[37]:
+# In[5]:
 
 # filename: minianalysis__cognate_variables.py
 # 
@@ -236,7 +236,7 @@ if __name__ == "__main__":
 # --
 
 
-# In[39]:
+# In[14]:
 
 import pickle
 group1 = 'original model'
@@ -246,7 +246,7 @@ outcomes = ['propSig', 'paramSizesNormed', 'Rs', 'adjRs', 'pvalues',  'numTotal'
 output = pickle.load(open('output.pickle'))
 
 
-# In[40]:
+# In[15]:
 
 df_output = pd.DataFrame(index=np.arange(len(output[group1]['propSig'])), columns=pd.MultiIndex.from_product([groups, outcomes]))
 df_output.columns.names = ['outcome','group']
@@ -260,7 +260,7 @@ print 'Using %f models from %f articles' % (len(df_output), len(df_output.index.
 df_output.to_pickle('df_output.pickle')
 
 
-# In[41]:
+# In[16]:
 
 get_ipython().magic(u'matplotlib inline')
 # #Plot outcomes - (new) distribution of differences approach
@@ -311,7 +311,7 @@ for outcome in outcomes:
 # <markdowncell>
 
 
-# In[35]:
+# In[17]:
 
 # #Plot outcomes - (old) bar chart approach
 
@@ -417,7 +417,7 @@ print mn, sd, mn/(sd/np.sqrt(df_output.shape[0]))
 # <markdowncell>
 
 
-# In[31]:
+# In[12]:
 
 # Perform t-tests and Tests using *clustered errors*
 # --
@@ -464,7 +464,7 @@ for outcome in outcomes:
     outcomes_combined = list(df_output[group1, outcome]) + list(df_output[group2, outcome])
     diffs = df_output[group1, outcome] - df_output[group2, outcome]
     dummy = [0]*len(df_output[group1, outcome]) + [1]*len(df_output[group2, outcome])
-    article_ids = list(df_output.article_id) 
+    article_ids = list(df_output.index) 
     
     # 2. Fit models
 #     result = smf.ols(formula='y~x', data=pd.DataFrame({'y':outcomes_combined, 'x':dummy})).fit() # do I need a constant???

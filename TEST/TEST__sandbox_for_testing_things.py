@@ -46,7 +46,7 @@ def independent_columns(A, tol = 1e-05):
     return A.iloc[:, independent]
 
 
-# In[4]:
+# In[3]:
 
 import pandas as pd
 import numpy as np
@@ -69,6 +69,12 @@ df = pd.read_csv('../../Data/test_collinear.csv', index_col=0)
 
 articlesToUse = GU.filterArticles(dataCont.articleClasses, GSSYearsUsed=True, GSSYearsPossible=False, centralIVs=True)
 article = [a for a in articlesToUse if a.articleID == 6759][0]
+
+
+# In[100]:
+
+import random
+print [a.articleID for a in random.sample(articlesToUse, 20)]
 
 
 # In[6]:
@@ -175,11 +181,11 @@ for year in article.GSSYearsUsed:
 
 
 
-# In[4]:
+# In[76]:
 
 import pandas as pd
 import numpy as np
-df = pd.read_csv('../Data/test_collinear.csv', index_col=0)
+df = pd.read_csv('../../Data/test_collinear.csv', index_col=0)
 from scipy.stats import pearsonr
 
 
@@ -188,12 +194,37 @@ from scipy.stats import pearsonr
 df.head()
 
 
-# In[176]:
+# #Imputing with GLRM
+
+# In[4]:
+
+from glrm import GLRM
+from glrm.loss import QuadraticLoss, HingeLoss
+from glrm.reg import QuadraticReg
+from glrm.convergence import Convergence
 
 
+# In[80]:
+
+get_ipython().magic(u'pinfo GLRM')
 
 
-# In[177]:
+# In[5]:
+
+regX, regY = QuadraticReg(0.01), QuadraticReg(0.01)
+
+converge = Convergence(TOL = 1e-5, max_iters = 100)
+
+model = GLRM(df.values, QuadraticLoss, regX, regY, k=2, converge=converge)
+model.fit()
+
+X, Y = model.factors()
+A_hat = model.predict() # a horizontally concatenated matrix, not a list
+
+norm(A_hat - hstack(A_list)) # by hand
+
+
+# In[ ]:
 
 
 

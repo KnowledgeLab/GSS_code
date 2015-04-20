@@ -19,7 +19,7 @@
 # 
 # """
 
-# In[57]:
+# In[1]:
 
 from __future__ import division
 
@@ -195,12 +195,12 @@ if __name__ == "__main__":
 pickle.dump(output, open('output.pickle', 'w'))
 
 
-# In[58]:
+# In[2]:
 
 output = pickle.load(open('output.pickle'))
 
 
-# In[59]:
+# In[3]:
 
 # info on the articles used
 all_articles = []
@@ -209,7 +209,7 @@ for yr in range(43):
 print 'Num of unique articles used:', len(set(all_articles))
 
 
-# In[60]:
+# In[4]:
 
 output[0]['metadata']['articleID']
 
@@ -227,7 +227,7 @@ output[0]['metadata']['articleID']
 # First, plot the actual outcomes (not *differences*)
 # --
 
-# In[61]:
+# In[6]:
 
 get_ipython().magic(u'matplotlib inline')
 # group1 = 'on_last_year_of_data'
@@ -334,9 +334,14 @@ legend()
 # #NEW CODE: Plot the *differences* 
 # 
 
-# In[62]:
+# In[7]:
 
 get_ipython().magic(u'matplotlib inline')
+group1 = 'on_last_year_of_data'
+group2 = 'on_future_year'    
+groups = [group1, group2]
+outcomes = ['propSig', 'paramSizesNormed', 'Rs', 'adjRs', 'pvalues', 'numTotal',             'propSig_CentralVars', 'paramSizesNormed_CentralVars', 'pvalues_CentralVars']
+    
 # group1 = 'on_last_year_of_data'
 # group2 = 'on_future_year'    
 
