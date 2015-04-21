@@ -1,7 +1,5 @@
-# -*- coding: utf-8 -*-
-# <nbformat>3.0</nbformat>
 
-# <markdowncell>
+# coding: utf-8
 
 # #Pull down data from ``lanl`` MySQL database and create ``articleClasses``
 # 
@@ -120,7 +118,7 @@
 # --
 # These are responses to the survey about each variable (in each article)
 
-# <codecell>
+# In[76]:
 
 import pandas as pd
 import cPickle as cp
@@ -129,30 +127,31 @@ sys.path.append('../')
 import GSSUtility as GU
 import seaborn as sns
 import MySQLdb
+import numpy as np
+from numpy import nan
 from random import sample # numpy has its own np.random.sample which works differently and overwrites "random.sample"
 
-# <codecell>
+
+# In[77]:
 
 db = MySQLdb.connect(host='klab.c3se0dtaabmj.us-west-2.rds.amazonaws.com', user='mteplitskiy', passwd="mteplitskiy", db="lanl")
 c = db.cursor()
 
-# <markdowncell>
 
 # #Get The Variables
 
-# <codecell>
+# In[78]:
 
 c.execute('select * from gss_variable_ques')
 # c.fetchall()
-df = pd.DataFrame([el for el in c.fetchall()], columns=('userid', 'author_id', 'article_id', 'var_name', 'var_control', \
-                                                        'var_central', 'var_dependent', 'var_independent', 'var_dontknow', \
-                                                        'var_type_majority'))
+df = pd.DataFrame([el for el in c.fetchall()], columns=('userid', 'author_id', 'article_id', 'var_name', 'var_control',                                                         'var_central', 'var_dependent', 'var_independent', 'var_dontknow',                                                         'var_type_majority'))
 del df['author_id']
 del df['var_type_majority']
 del df['userid']
 df.head()
 
-# <codecell>
+
+# In[79]:
 
 # convert datatypes so that I can add them to get majority
 df.var_central = df.var_central.astype(bool)
@@ -161,17 +160,17 @@ df.var_dependent = df.var_dependent.astype(bool)
 df.var_independent = df.var_independent.astype(bool)
 df.var_dontknow = df.var_dontknow.astype(bool)
 
-# <codecell>
+
+# In[80]:
 
 # TALLY THE VOTES FOR EACH VARIABLE TYPE
 df_variables = df.groupby(('article_id', 'var_name')).sum()
 df_variables.head(5)
 
-# <markdowncell>
 
 # ###Create majority vote for whether variable is indep or dep
 
-# <codecell>
+# In[81]:
 
 # create a custom max function
 
@@ -187,26 +186,25 @@ def custom_max(s): # s is a series
     
 df_variables['majority_vote_type'] = df_variables.apply(custom_max, axis=1)
 
-# <markdowncell>
 
 # ###Create vote for whether variable is central, ``majority_vote_central``
 
-# <codecell>
+# In[82]:
 
 #If at least one person thinks it's central, then it's central
 df_variables['majority_vote_central'] = df_variables.var_central.astype(bool)
 
-# <markdowncell>
 
 # #Check how many "ties" there are on variable codes
 
-# <codecell>
+# In[83]:
 
 # there is ~1600 articles but ~22,000 rows in df_variables because each article has many variables.
 # So it appears nearly every article has a tie.
 def is_there_a_tie(s):
-    # if there is a legitimate tie (not all )
-    if s['var_dependent'] > 0 and (s['var_dependent'] == s['var_independent']):
+    # if there is a legitimate tie
+    if s['var_dependent'] > 0 and (s['var_dependent'] == s['var_independent'] 
+                                   or s['var_dependent'] == s['var_independent']+s['var_control']):
         return 'tie: dependent == independent'
     elif s['var_dependent'] > s['var_independent']:
         return 'dep > indep'
@@ -218,14 +216,34 @@ def is_there_a_tie(s):
         return 'dependent > ind + control'
     else: 
         return nan     
-vcs = df_variables.apply(is_there_a_tie, axis=1)
-vcs.value_counts()
+df_variables['is_there_a_tie'] = df_variables.apply(is_there_a_tie, axis=1)
+print df_variables.is_there_a_tie.value_counts()
 
-# <markdowncell>
+
+# In[84]:
+
+df_variables[df_variables.majority_vote_type.isnull()][['majority_vote_type', 'is_there_a_tie']].head()
+
+
+# In[86]:
+
+# How many UNIQUE ARTICLES have at least one tie?
+df_var_copy = df_variables.copy()
+df_var_copy['article_id'] = df_var_copy.index.get_level_values(0)
+df_var_copy['tie'] = df_var_copy.apply(is_there_a_tie, axis=1)
+ids_with_tie = df_var_copy[df_var_copy.tie == 'tie: dependent == independent'].article_id.unique()
+print 'Unique articles with at least one tie:', len(ids_with_tie)
+
+
+# In[88]:
+
+#How many articles will be *gained* by resolving ties?
+#df_var_copy[df_var_copy.article_id.isin(ids_with_tie)].majority_vote_type == 'var_dependent'
+
 
 # #Get the GSS Years
 
-# <codecell>
+# In[90]:
 
 c.execute('select true_article_id, gss_years, year_published from gss_corpus')
 df_years = pd.DataFrame([el for el in c.fetchall()], columns=['article_id', 'gss_years', 'year_published'])
@@ -234,20 +252,25 @@ df_years.gss_years = df_years.gss_years.astype(str)
 
 del df_years['article_id']
 
-df_years.head()
+df_years.sort('year_published', ascending=False).head()
 
-# <markdowncell>
+
+# In[ ]:
+
+
+
 
 # ###Pre-process
 
-# <codecell>
+# In[28]:
 
 GSS_YEARS = [1972, 1973, 1974, 1975, 1976, 1977, 1978, 1980, 1982,  
                  1983, 1984, 1985, 1986, 1987, 1988, 1989, 1990, 1991,
                  1993, 1994, 1996, 1998, 2000, 2002, 2004, 2006, 2008, 2010,
                  2012]
 
-# <codecell>
+
+# In[29]:
 
 def f(x):  
     x = x.replace(' ', '')
@@ -266,11 +289,10 @@ def f(x):
 
 df_years.gss_years = df_years.gss_years.map(f)
 
-# <markdowncell>
 
 # ###Now parse the years strings
 
-# <codecell>
+# In[30]:
 
 def clean_years(x):
     
@@ -336,11 +358,10 @@ def clean_years(x):
     
 df_years['years_cleaned'] = df_years.gss_years.apply(clean_years)    
 
-# <markdowncell>
 
 # ##Now create articleClasses list
 
-# <codecell>
+# In[57]:
 
 '''
 description: 
@@ -403,8 +424,7 @@ for article_id in article_ids: # for each article for which we have information 
     DVs =  article_df[article_df.majority_vote_type == 'var_dependent'].index
     # currently the line below is uesless, because majority_vote_type is never var_control
     controls =  article_df[article_df.majority_vote_type == 'var_control'].index
-    centralIVs =  article_df[np.array(article_df.majority_vote_type == 'var_independent') \
-                             & np.array(article_df.majority_vote_central == True)].index
+    centralIVs =  article_df[np.array(article_df.majority_vote_type == 'var_independent')                              & np.array(article_df.majority_vote_central == True)].index
 
     # uncomment later!
 #     make sure there is at least one DV and at least one IV
@@ -457,27 +477,26 @@ for article_id in article_ids: # for each article for which we have information 
     currentArticle = articleClass(article_id, IVs, DVs, controls, centralIVs, oldGSSYears, newGSSYears, yearPublished=yearPublished)
     articleClasses.append(currentArticle)
 
-# <codecell>
+
+# In[58]:
 
 # save the list    
 cp.dump(articleClasses, open(pathToData + 'articleClasses.pickle', 'wb'))
 
-# <markdowncell>
 
 # #Let's examine articleClasses to see how much of it is usable!
 
-# <codecell>
+# In[54]:
 
 print 'Total instances:', len(articleClasses)
 print 'Skipped articles:', countOfNoGSSYearsUsed
 print 'Imputed GSS years:', countImputed
 print 'Max year published:', maxYearPublished
 
-# <markdowncell>
 
 # ##Why no years above 2005, even when imputing?
 
-# <codecell>
+# In[14]:
 
 # we don't have variables information on any of them!!!
 # (or year information, either)
@@ -490,11 +509,10 @@ for a in articles_above_2005:
     except:
         pass
 
-# <markdowncell>
 
 # ###How many articles don't have a DV and at least one IV?
 
-# <codecell>
+# In[15]:
 
 countNoDvs = 0
 countNoIvs = 0
@@ -510,11 +528,10 @@ for a in articleClasses:
 print 'no IVs', countNoIvs
 print 'no DVs', countNoDvs 
 
-# <markdowncell>
 
 # ###Take a look at some of those without DVs
 
-# <codecell>
+# In[16]:
 
 df_variables.loc[no_dvs]
 
