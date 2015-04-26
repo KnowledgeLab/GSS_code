@@ -14,15 +14,14 @@
 # @author: Misha
 # 
 
-# In[4]:
+# In[12]:
 
 from __future__ import division
-# %matplotlib inline
 
 import matplotlib.pyplot as plt
 
 import pandas as pd
-#import cPickle as cp
+import pickle
 
 import sys
 sys.path.append('../')    
@@ -43,13 +42,13 @@ custom_style = {'axes.facecolor': 'white',
 sb.set_style("darkgrid", rc=custom_style)
 
 
-# In[2]:
+# In[13]:
 
 get_ipython().magic(u'rm ../GSSUtility.pyc # remove this file because otherwise it will be used instead of the updated .py file')
 reload(GU)
 
 
-# In[3]:
+# In[ ]:
 
 #*********************************************************
 allPropsForYearsUsed = []
@@ -65,7 +64,7 @@ if __name__ == "__main__":
     pathToData = '../../Data/'
     dataCont = GU.dataContainer(pathToData)
     
-    articlesToUse = GU.filterArticles(dataCont.articleClasses, GSSYearsUsed=True, GSSYearsPossible=True,                                         centralIVs=True, nextYearBound=3) #, linearModels=True)            
+    articlesToUse = GU.filterArticles(dataCont.articleClasses, GSSYearsUsed=True, GSSYearsPossible=True,                                         centralIVs=False, nextYearBound=3, linearModels=False)            
     print 'len of articleClasses:', len(articlesToUse)
 #     raw_input('...')
     
@@ -162,7 +161,7 @@ if __name__ == "__main__":
             output['metadata']['article_id'].append(article.articleID)                 
      
    
-    
+pickle.dump(output, open('output.pickle', 'w'))    
 #     print 'TTests'
 #     for outcome in outcomes:
 #         print 'Means of group1 and group2:', np.mean(output[group1][outcome]), np.mean(output[group2][outcome]), 'Paired T-test of ' + outcome, ttest_rel(output[group1][outcome], output[group2][outcome])
@@ -171,7 +170,16 @@ if __name__ == "__main__":
 # Create dataframe that contains the output 
 # --
 
-# In[4]:
+# In[28]:
+
+output = pickle.load(open('output.pickle'))
+group1 = 'on last GSS year'
+group2 = 'on first "future" GSS year'   
+groups = [group1, group2]
+outcomes = ['propSig', 'paramSizesNormed', 'Rs', 'adjRs', 'pvalues',  'numTotal',             'propSig_CentralVars', 'paramSizesNormed_CentralVars', 'pvalues_CentralVars']
+
+
+# In[29]:
 
 df_output = pd.DataFrame(index=np.arange(len(output[group1]['propSig'])), columns=pd.MultiIndex.from_product([groups, outcomes]))
 df_output.columns.names = ['outcome','group']
@@ -181,47 +189,43 @@ for outcome in outcomes:
 df_output['article_id'] = output['metadata']['article_id']
 del df_output[group1, 'numTotal']
 del df_output[group2, 'numTotal']
-
-df_output.to_pickle('df_output.pickle')
-# df_output
-
-
-# In[5]:
-
-# if using another, non-ipython notebook method of running the code
-# load in the output of that other method, and set up the relevant variables
-df_output = pd.read_pickle('df_output.pickle')
-group1 = 'on last GSS year'
-group2 = 'on first "future" GSS year'   
-groups = [group1, group2]
-outcomes = ['propSig', 'paramSizesNormed', 'Rs', 'adjRs', 'pvalues',  'numTotal',             'propSig_CentralVars', 'paramSizesNormed_CentralVars', 'pvalues_CentralVars']
 df_output.head()
-
-
-# In[6]:
+# df_output.to_pickle('df_output.pickle')
+# df_output
 
 outcomes.remove('numTotal')
 
-
-# ###Number of unique articles used
-
-# In[7]:
-
 print 'Number of unique articles used:', len(df_output['article_id'].unique())
+
+
+# In[30]:
+
+# if using another, non-ipython notebook method of running the code
+# load in the output of that other method, and set up the relevant variables
+# df_output = pd.read_pickle('df_output.pickle')
+# group1 = 'on last GSS year'
+# group2 = 'on first "future" GSS year'   
+# groups = [group1, group2]
+# outcomes = ['propSig', 'paramSizesNormed', 'Rs', 'adjRs', 'pvalues',  'numTotal', \
+#             'propSig_CentralVars', 'paramSizesNormed_CentralVars', 'pvalues_CentralVars']
 
 
 # Plot the output
 # --
 
-# In[8]:
+# In[31]:
 
 get_ipython().magic(u'matplotlib inline')
+
 outcomesToUse = df_output[group1].columns
 indices = np.arange(len(outcomesToUse))
 width = 0.35
 axes = plt.figure(figsize=(12,8)).add_subplot(111)
-rects1 = plt.bar(left=indices, width=width, height=df_output[group1].mean(), color='r')#, yerr=df_output['orig. models'].std()) #this is not relevant because we're not comparing groups
-rects2 = plt.bar(left=indices+width, width=width, height=df_output[group2].mean(), color='y')#, yerr=df_output['cognate models'].std())
+error_config = {'ecolor': '0.3'}
+rects1 = plt.bar(left=indices, width=width, height=df_output[group1].mean(), color='r', 
+                 yerr=df_output[group1].std()/np.sqrt(len(df_output[group1])), error_kw=error_config) 
+rects2 = plt.bar(left=indices+width, width=width, height=df_output[group2].mean(), color='y', 
+                 yerr=df_output[group2].std()/np.sqrt(len(df_output[group2])), error_kw=error_config)
 
 # title, legend, etc
 plt.title('Models Using Last GSS Year vs. First "Future" Year', fontsize=18)

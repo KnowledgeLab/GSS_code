@@ -1,7 +1,7 @@
 
 # coding: utf-8
 
-# In[1]:
+# In[12]:
 
 from __future__ import division
 
@@ -21,12 +21,21 @@ if __name__ == '__main__':
     df_vartypes = pd.Series(varTypes)
     df_vartypes['HOMOSEX'] = 'CL'
     df_vartypes['LIFE'] = 'CL'
+    df_vartypes['DENOM'] = 30
+    df_vartypes['DENOM16'] = 30
+    df_vartypes['PARTYID'] = 'DONOTUSE'
+    df_vartypes['WRKSTAT'] = 'DONOTUSE'
 
     # temp_file = open(pathToData + 'variableTypes.pickle', 'wb')
     dump(df_vartypes.to_dict(), open(pathToData + 'variableTypes.pickle', 'wb'))
 
 
-# In[3]:
+# In[17]:
+
+# df_vartypes['PARTYID']
+
+
+# In[13]:
 
 '''
 Created on Wed Apr 02, 2014
@@ -57,12 +66,12 @@ from collections import defaultdict
 from GSSUtility import *
 from cPickle import load, dump
 import random # note, scipy.random.choice doesn't work even though it ought to be the same function!!!
-import rpy2.robjects as robjects
-from rpy2.robjects import pandas2ri
-pandas2ri.activate()
-from rpy2.robjects import StrVector
-import rpy2
-import pandas.rpy.common as com
+# import rpy2.robjects as robjects
+# from rpy2.robjects import pandas2ri
+# pandas2ri.activate()
+# from rpy2.robjects import StrVector
+# import rpy2
+# import pandas.rpy.common as com
 
 
 GSS_YEARS = [1972, 1973, 1974, 1975, 1976, 1977, 1978, 
@@ -108,19 +117,21 @@ class dataContainer:
     variableTypes = []
     articleClasses = []
     df = None
-    r = None
-    mice = None
-    complete = None
+    # lines below are fold old way of imputing (using R)
+#     r = None
+#     mice = None
+#     complete = None
     
     def __init__(self, pathToData='../../Data/'):
         
-        import rpy2.robjects as robjects
-        self.r = robjects.r
+          # lines below are for old way of imputing (using R)
+#         import rpy2.robjects as robjects
+#         self.r = robjects.r
         
-        from rpy2.robjects.packages import importr
-        importr('mice')
-        self.mice = self.r['mice']
-        self.complete = self.r['complete']
+#         from rpy2.robjects.packages import importr
+#         importr('mice')
+#         self.mice = self.r['mice']
+#         self.complete = self.r['complete']
         
         self.dictOfVariableGroups = load(open(pathToData + 'dictOfVariableGroups.pickle'))
         self.variableTypes = load(open(pathToData + 'variableTypes.pickle'))
@@ -150,7 +161,7 @@ class dataContainer:
 def removeMissingValues(design, axis=0):
     '''
     Description: Goes through each column in DataFrame and replaces its missing values with np.nan.
-    if axis=0:  gets rid of all rows that have at least one missing value.
+    if axis=0: gets rid of all rows that have at least one missing value.
     if axis=1: gets rid of all columns that are entirely np.nan
     
     Inputs: DataFrame
@@ -220,7 +231,7 @@ def createFormula(dataCont, design, return_nominals=False):
     
     nominals = []
     
-    # LHS (left-hand side)
+    # LHS (dep. variable type)
     # check to make sure the DV is not 'DONOTUSE' or a categorical
     DV = design.columns[0]
     if DV not in dataCont.variableTypes: formula = 'standardize('+ DV +', ddof=1) ~ ' 
@@ -305,53 +316,49 @@ def runModel(dataCont, year, DV, IVs, controls=[]):
     '''
     design = df.loc[year, [DV] + IVs + controls]
     design = design.astype(float) # again because R messes up for ints
-    design.index = range(len(design)) # using R for imputation messes up when the index is all the same values (year)
-    
-    # gonna cut off the following from the line above.. shouldn't need it:
-    #.copy(deep=True)  # Need to make a deep copy so that original df isn't changed
-
-    # constant columns happen somewhat often, e.g. a variable like religous is always == 1 if the study also uses a varaiable
-    # like denom == the specific denomination
-    design = removeConstantColumns(design) 
-
-    # create formula, and from here figure out what variables are categorical for the next step (imputation)    
-#     nominals = createFormula(dataCont, design, return_nominals=True)
-      
+#    design.index = range(len(design)) # using R for imputation messes up when the index is all the same values (year)
+         
     #IMPUTE MISSING VALUES
-    try:
+#     try:
         
-        # MI version
-        rcode='''
-            library(mi)
-            mydf = %s
-            IMP = mi(mydf, n.imp=2, n.iter=6, max.minutes=1)
-            imp1 <- mi.data.frame(IMP, m = 1)
-            ''' % com.convert_to_r_dataframe(design).r_repr()
-        dataCont.r(rcode)
-        design = com.convert_robj(dataCont.r['imp1'])
+#         # MI version
+#         rcode='''
+#             library(mi)
+#             mydf = %s
+#             IMP = mi(mydf, n.imp=2, n.iter=6, max.minutes=1)
+#             imp1 <- mi.data.frame(IMP, m = 1)
+#             ''' % com.convert_to_r_dataframe(design).r_repr()
+#         dataCont.r(rcode)
+#         design = com.convert_robj(dataCont.r['imp1'])
         
         #MICE version
 #         design.iloc[:,:] = com.convert_robj(dataCont.complete(dataCont.mice(design.values, m=1))).values
         
-        print 'imputing worked fine'
-    except:
-        print 'imputing didnt work'
-        print year, DV, IVs
-        nominals = createFormula(dataCont, design, return_nominals=True)
-        non_nominals = list(set(design.columns) - set(nominals)) # list because sets are unhashable and cant be used for indices
-        if len(non_nominals)>0: 
-            design[non_nominals] = design[non_nominals].fillna(design[non_nominals].mean()) # the naive way
-        if len(nominals)>0:
-            design[nominals] = design[nominals].fillna(design[nominals].mode())
-#     design2 = design.fillna(design.median())
-    
-#     KEEP ONLY NON-COLLINEAR COLUMNS
-    design = independent_columns(design)
-    
+#         print 'imputing worked fine'
+#     except:
+#         print 'imputing didnt work'
+#         print year, DV, IVs
+
+    # check if we need to impute at all. if number of complete cases <= number of variables, then impute
+#     if design.dropna().shape[0] <= design.shape[1]:
+    nominals = createFormula(dataCont, design, return_nominals=True)
+    non_nominals = list(set(design.columns) - set(nominals)) # list because sets are unhashable and cant be used for indices
+    if len(non_nominals)>0: 
+        design[non_nominals] = design[non_nominals].fillna(design[non_nominals].mean()) # the naive way
+    if len(nominals)>0:
+        design[nominals] = design[nominals].fillna(design[nominals].mode())
+
+    # constant columns happen somewhat often, e.g. a variable like religous is always == 1 if the study also uses a varaiable
+    # like denom == the specific denomination
+    design = removeConstantColumns(design.dropna()) 
+  
     # if the line above removed DV column, then can't use this model, return None
     if design is None or DV not in design: 
         print 'design is None or DV not in design'
         return None    
+
+#     keep only non-collinear columns
+    design = independent_columns(design)
 
     #need to make sure there are still IVs left after we dropped some above    
     if design.shape[1] < 2: 
@@ -371,7 +378,7 @@ def runModel(dataCont, year, DV, IVs, controls=[]):
     
     # calculate the results   
     try:
-        results = smf.ols(formula, data=design.dropna()).fit() # do I need the missing='drop' part?
+        results = smf.ols(formula, data=design.dropna()).fit() 
     except:
         print 'Error running model'
         return None

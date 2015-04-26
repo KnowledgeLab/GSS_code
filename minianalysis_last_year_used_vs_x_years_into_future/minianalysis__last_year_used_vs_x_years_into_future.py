@@ -24,10 +24,8 @@
 from __future__ import division
 
 import matplotlib.pyplot as plt
-
 import pandas as pd
-
-#import cPickle as cp
+import pickle 
 import sys
 sys.path.append('../')    
 import GSSUtility as GU
@@ -49,20 +47,20 @@ custom_style = {'axes.facecolor': 'white',
 sb.set_style("darkgrid", rc=custom_style)
 
 
-# In[3]:
+# In[2]:
 
 get_ipython().magic(u'rm ../GSSUtility.pyc # remove this file because otherwise it will be used instead of the updated .py file')
 reload(GU)
 
 
-# In[10]:
+# In[ ]:
 
 if __name__ == "__main__":    
 
     pathToData = '../../Data/'
     dataCont = GU.dataContainer(pathToData)
     
-    articlesToUse = GU.filterArticles(dataCont.articleClasses, GSSYearsUsed=True, GSSYearsPossible=True, centralIVs=False,                                      linearModels=True)            
+    articlesToUse = GU.filterArticles(dataCont.articleClasses, GSSYearsUsed=True, GSSYearsPossible=True, centralIVs=False,                                      linearModels=False)            
     print 'len of articleClasses:', len(articlesToUse)
 #     raw_input('...')
     
@@ -71,7 +69,8 @@ if __name__ == "__main__":
     group2 = 'on_future_year'    
     output = defaultdict(dict)
     groups = [group1, group2]
-    outcomes = ['propSig', 'paramSizesNormed', 'Rs', 'adjRs', 'pvalues', 'numTotal',                 'propSig_CentralVars', 'paramSizesNormed_CentralVars', 'pvalues_CentralVars']
+    outcomes = ['propSig', 'paramSizesNormed', 'Rs', 'adjRs',  'numTotal', \ #'pvalues',
+                'propSig_CentralVars', 'paramSizesNormed_CentralVars'] #'pvalues_CentralVars'
     
     for yr in range(43):
 #         output[yr] = {}
@@ -88,7 +87,7 @@ if __name__ == "__main__":
     for article in articlesToUse:
     #for article in [a for a in articlesToUse if a.articleID == 6755]:
     
-        print 'Processing article:', article.articleID
+        print '\n\n============================================\nProcessing article:', article.articleID
  
         '''             
         # define the outcomes I'm interseted in for the two groups. td = "temp data" 
@@ -181,6 +180,7 @@ if __name__ == "__main__":
                 output[futureYear - maxYearUsed]['metadata']['future_GSS_year'].append(futureYear)
                 output[futureYear - maxYearUsed]['metadata']['articleID'].append(article.articleID)                 
 
+pickle.dump(output, open('output.pickle', 'w'))
 #     print 'TTests'
 
 #     for year in range(43):
@@ -190,28 +190,19 @@ if __name__ == "__main__":
 #                     'Paired T-test of ' + outcome, ttest_rel(output[year][group1][outcome], output[year][group2][outcome])
 
 
-# In[3]:
-
-pickle.dump(output, open('output.pickle', 'w'))
-
-
-# In[2]:
+# In[46]:
 
 output = pickle.load(open('output.pickle'))
-
-
-# In[3]:
+group1 = 'on_last_year_of_data'
+group2 = 'on_future_year'    
+groups = [group1, group2]
+outcomes = ['propSig', 'paramSizesNormed', 'Rs', 'adjRs', 'pvalues', 'numTotal',             'propSig_CentralVars', 'paramSizesNormed_CentralVars', 'pvalues_CentralVars']
 
 # info on the articles used
 all_articles = []
 for yr in range(43):
     all_articles.extend(output[yr]['metadata']['articleID'])
 print 'Num of unique articles used:', len(set(all_articles))
-
-
-# In[4]:
-
-output[0]['metadata']['articleID']
 
 
 # #Plot outcomes x years into future
@@ -227,7 +218,7 @@ output[0]['metadata']['articleID']
 # First, plot the actual outcomes (not *differences*)
 # --
 
-# In[6]:
+# In[8]:
 
 get_ipython().magic(u'matplotlib inline')
 # group1 = 'on_last_year_of_data'
@@ -334,7 +325,7 @@ legend()
 # #NEW CODE: Plot the *differences* 
 # 
 
-# In[7]:
+# In[47]:
 
 get_ipython().magic(u'matplotlib inline')
 group1 = 'on_last_year_of_data'
@@ -380,11 +371,16 @@ for i, outcome in enumerate(outcomes_ordered):
     yearlyDiffs = [np.array(output[year][group2][outcome]) - np.array(output[year][group1][outcome]) for year in YEARS]  
     yerr = [nanstd(x)/np.sqrt(len(x)) for x in yearlyDiffs]
     means = [nanmean(x) for x in yearlyDiffs]
-    
+
+    #for clustered errors
+    article_indices = np.array(np.sum([output[yr]['metadata']['articleID'] for yr in YEARS]))
+
     x, y = [], []  
     for yr in YEARS:
          x.extend([yr]*len(yearlyDiffs[yr]))
          y.extend(yearlyDiffs[yr])
+    x = np.array(x)
+    y = np.array(y)
 #          y_means.append(np.mean(output[yr][group2][outcome]))
 
     #         for diffy in yearlyDiffs[j]:
@@ -408,8 +404,11 @@ for i, outcome in enumerate(outcomes_ordered):
     
     # add regression line
     formula = outcome+'~years'
-#     result = smf.rlm(formula, data=pd.DataFrame({'years':x, outcome:y}).dropna(axis=0), missing='drop').fit()
-    result = smf.ols(formula, data=pd.DataFrame({'years':x, outcome:y}).dropna(axis=0), missing='drop').fit()
+    
+    mask = ~np.isnan(y)
+    result = smf.ols(formula, data=pd.DataFrame({'years':x[mask], outcome:y[mask]}).dropna(axis=0),
+                     missing='drop').fit(cov_type='cluster', cov_kwds=dict(groups=article_indices[mask]))
+    
     axarr[i].plot(YEARS, np.array(YEARS)*result.params[1] + result.params[0], 'r--')
 
     # add the slope and its p-value
@@ -428,10 +427,20 @@ f.text(0.5, 1-0.05, 'Outcomes x-Years Into Future', ha='center', fontsize=20)
 # savefig('../../Images/9-29-2014--outcomes_last_year_vs_x_years_into_future_all_8.png')
 
 
+# In[44]:
+
+np.array(article_indices)[mask].shape
+
+
+# In[31]:
+
+get_ipython().magic(u'debug')
+
+
 # OLD CODE: Second, plot the *differences* in outcomes between last_year_used and future_year
 # --
 
-# In[6]:
+# In[49]:
 
 # group1 = 'on_last_year_of_data'
 # group2 = 'on_future_year'    
@@ -529,7 +538,7 @@ f.text(0.5, 1-0.05, 'Outcomes x-Years Into Future', ha='center', fontsize=20)
 # All outcomes are still p < 0.05 (!!!) except the time-trends in p-values, which are not p > 0.05. 
 # 
 
-# In[60]:
+# In[48]:
 
 # group1 = 'on_last_year_of_data'
 # group2 = 'on_future_year'    
@@ -622,5 +631,5 @@ f.text(0.5, 0.05, 'Years after publication', ha='center',  va='bottom',fontsize=
 f.text(0.5, 1-0.05, 'Robustness Test: Outcomes after Publication', ha='center', fontsize=18)
 f.text(0.5, 1-0.07, 'using Clustered Standard Errors', ha='center', fontsize=18)
 
-savefig('../../Images/10-23-2014--robustness_test--outcomes_after_publication_with_clustered_errors.png')
+# savefig('../../Images/10-23-2014--robustness_test--outcomes_after_publication_with_clustered_errors.png')
 

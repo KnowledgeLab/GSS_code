@@ -111,10 +111,13 @@
 # --
 # These are responses to the survey about each variable (in each article)
 
-# In[4]:
+# In[15]:
 
 import pandas as pd
-import cPickle as cp
+import matplotlib.pyplot as plt
+import pickle
+import numpy as np
+from numpy import nan
 import sys
 sys.path.append('../')
 import GSSUtility as GU
@@ -123,7 +126,17 @@ import MySQLdb
 from random import sample # numpy has its own np.random.sample which works differently and overwrites "random.sample"
 
 
-# In[5]:
+# In[13]:
+
+get_ipython().magic(u'matplotlib inline')
+
+
+# In[18]:
+
+sns.axes_style()
+
+
+# In[2]:
 
 custom_style = {'axes.facecolor': 'white',
                 'grid.color': '0.15',
@@ -157,23 +170,26 @@ df[df.year_published.notnull()].gss_years_used.value_counts()
 # According to he below, there seems to be a sizable number of articles published > 2005
 # --
 
-# In[6]:
+# In[87]:
 
-df[df.year_published.notnull()].groupby('year_published').count()
+df[df.year_published.notnull()].groupby('year_published').count().head()
 
 
-# In[8]:
+# In[86]:
 
 grouped = df[df.year_published.notnull()].groupby('year_published')
-grouped.get_group(2004)
+grouped.get_group(2004).head()
 
 
 # # Number of variables over time
 
-# In[13]:
+# In[52]:
 
-path_to_data = '/mnt/ide0/home/misha/GSSproject/Data/'
-articleClasses = cp.load(open(path_to_data + 'articleClasses.pickle'))
+pathToData = '../../Data/'
+dataCont = GU.dataContainer(pathToData)
+    
+articlesClasses = GU.filterArticles(dataCont.articleClasses, GSSYearsUsed=True)            
+
 df = pd.DataFrame(columns=['aid', 'yearpublished', 'dvs', 'ivs', 'controls', 'total'])
 for a in articleClasses:
     df.loc[a.articleID, :] = np.array([a.articleID, a.yearPublished, a.DVs, a.IVs, a.controls, 0], dtype=object)
@@ -195,38 +211,48 @@ grouped = df.groupby('yearpublished')
 # 
 # Note: This is using articleClasses, which consists of only articles that survived a fair amount of filtering. 
 
-# In[14]:
+# In[59]:
 
-grouped['aid'].count().plot(style='s-')
+grouped['aid'].count().plot(style='s-', c='0.25', linewidth=2)
 # legend(fontsize=15)
-xlim((1973, 2010))
-title('Articles per Year', fontsize=18)
-xlabel('Year published', fontsize=15)
-ylabel('Number of articles', fontsize=15)
+plt.xlim((1970, 2006))
+plt.title('Articles per Year', fontsize=18)
+plt.xlabel('Year published', fontsize=15)
+plt.ylabel('Number of articles', fontsize=15)
+plt.xticks(fontsize=14)
 # savefig('../../images/9-4-2014--articles-per-year.jpg')
 
 
-# In[3]:
+# In[74]:
 
-
+plt.figure(figsize=(6,4))
 # grouped.mean()[['dvs', 'ivs', 'controls', 'total']].plot()
 means = grouped.mean()
+ses = pd.rolling_std(grouped.sum(), window=3, axis=0)
 
 # figsize(())
-pd.rolling_mean(means.dvs, window=3).plot(label="Dependent var's", style='s--') 
-pd.rolling_mean(means.ivs, window=3).plot( label="Independent var's", style='s--')
+pd.rolling_mean(means.dvs, window=3).plot(label="Dependent var's", linewidth=2, style='o-', c='0.25') 
+pd.rolling_mean(means.ivs, window=3).plot( label="Independent var's", linewidth=2, style='o-.', c='0.25')
 # plot(means.index, means['total'], '--', linewidth=1, label="All var's")
-legend(fontsize=15)
-xlim((1974, 2005))
-title('Variables per Article over Time', fontsize=18)
-xlabel('Year published', fontsize=15)
-ylabel('Variables per article', fontsize=15)
-# savefig('../../images/variables_per_article_over_time.jpg')
+plt.legend(fontsize=15, loc='best')
+plt.xlim((1974, 2005))
+plt.title('Variables per Article over Time', fontsize=18)
+plt.xlabel('Year published', fontsize=15)
+plt.ylabel('Variables per article', fontsize=15)
+# plt.savefig('../../images/variables_per_article_over_time.jpg')
+
+
+# In[101]:
+
+years = np.unique(dataCont.df.index)
+sample_sizes = [np.sum(dataCont.df.index==year) for year in years]
+plt.plot(years, sample_sizes, 'o-', color='0.25', linewidth=2)
+plt.ylim(0,4600)
 
 
 # #Descriptives of Model Outcomes
 
-# In[159]:
+# In[8]:
 
 if __name__ == "__main__":    
     
@@ -290,7 +316,6 @@ if __name__ == "__main__":
                     output['propSig_CentralVars'].append(float(len([p for p in results.pvalues[centralVars] if p < 0.05]))                                                             /len(results.params[centralVars])) 
                     output['paramSizesNormed_CentralVars'].append(np.mean(results.params[centralVars].abs()))                    
                 else: 
-                    print 'no central variables'
                     output['pvalues_CentralVars'].append(nan)
                     output['propSig_CentralVars'].append(nan)
                     output['paramSizesNormed_CentralVars'].append(nan)
@@ -300,7 +325,7 @@ if __name__ == "__main__":
 
 # #Create dataframe to store *output*
 
-# In[160]:
+# In[76]:
 
 df_output = pd.DataFrame(output, index=output['article_id'])
 del df_output['numTotal']
@@ -310,7 +335,7 @@ print len(set(df_output.index))
 
 # #Plot outcome distributions
 
-# In[156]:
+# In[79]:
 
 outcomeMap = {'propSig':"% of Stat. Sign. Coeff's", 
               'paramSizesNormed':"Standard. Size of Coeff's",
@@ -323,26 +348,31 @@ outcomeMap = {'propSig':"% of Stat. Sign. Coeff's",
 
 for outcome in df_output.columns:
     if outcome=='article_id': continue
-    figure(figsize=(4,4))
-    xticks(fontsize=15)
-    yticks(fontsize=15)
-    ylabel('Density', fontsize=17)
+    plt.figure(figsize=(4,4))
+    plt.xticks(fontsize=15)
+    plt.yticks(fontsize=15)
+    plt.ylabel('Density', fontsize=17)
 
 
-    title(outcomeMap[outcome], fontsize=20)
+    plt.title(outcomeMap[outcome], fontsize=20)
     print outcome + 'Mean: %0.3f, s.d.: %0.3f' % (df_output[outcome].mean(), df_output[outcome].std())
 
-    sns.kdeplot(df_output[outcome].dropna(), shade=False, color='black', legend=False)
+    sns.kdeplot(df_output[outcome].dropna(), shade=True, color='black', legend=False)
 #     sns.kdeplot(df2_output[outcome].dropna(), shade=False, color='blue', legend=False)
 
     if '%' in outcomeMap[outcome] or 'P-value' in outcomeMap[outcome] or 'Size' in outcomeMap[outcome]:
-        xlim((0,1))
+        plt.xlim((0,1))
     elif 'R-' in outcomeMap[outcome]:
-        xlim(0,0.6)
+        plt.xlim(0,0.6)
     else:
-        xlim(0, 1.05*df_output[outcome].max())
+        plt.xlim(0, 1.05*df_output[outcome].max())
     #     df_output[outcome].dropna().plot(kind='kde', color='black', linewidth=3)
 
 #     df_output[outcome].hist(bins=30)
-    savefig('../../Images/descriptives--' + outcome + '.svg', bbox_inches='tight')
+#     savefig('../../Images/descriptives--' + outcome + '.svg', bbox_inches='tight')
+
+
+# In[ ]:
+
+
 

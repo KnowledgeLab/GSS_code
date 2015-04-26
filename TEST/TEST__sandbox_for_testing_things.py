@@ -16,6 +16,12 @@ from pandas.rpy import common as com
 
 # In[2]:
 
+get_ipython().magic(u'rm ../GSSUtility.pyc # remove this file because otherwise it will be used instead of the updated .py file')
+reload(GU)
+
+
+# In[3]:
+
 pathToData = '../../Data/'
 dataCont = GU.dataContainer(pathToData)
 
@@ -65,101 +71,106 @@ df = pd.read_csv('../../Data/test_collinear.csv', index_col=0)
 # df.index = range(len(df))
 
 
-# In[5]:
+# In[36]:
 
 articlesToUse = GU.filterArticles(dataCont.articleClasses, GSSYearsUsed=True, GSSYearsPossible=False, centralIVs=True)
-article = [a for a in articlesToUse if a.articleID == 6759][0]
+article = [a for a in articlesToUse if a.articleID == 7449][0]
 
 
-# In[100]:
+# In[37]:
 
 import random
 print [a.articleID for a in random.sample(articlesToUse, 20)]
 
 
-# In[6]:
+# In[38]:
 
-article.IVs, article.DVs, article.GSSYearsUsed, article.centralIVs, article.GSSYearsUsed
+article.IVs, article.DVs, article.centralIVs, article.GSSYearsUsed
 
 
-# In[7]:
+# In[14]:
 
 formula2 = '''
-standardize(SATJOB, ddof=1) ~ JOBPROMO '''
+standardize(FUND, ddof=1) ~ C(RELIG)'''
 DV = article.DVs[0]
 
 
-# In[12]:
+# In[42]:
 
-design = dataCont.df.loc[1976, [DV] + article.IVs]
+design = dataCont.df.loc[1973, [DV] + article.IVs]
 design.index = range(len(design))
 design.head()
 
 
-# In[23]:
+# In[17]:
 
-mi(com.convert_to_r_dataframe(design))
+# mi(com.convert_to_r_dataframe(design))
 
 
 # In[30]:
 
-summary = r['summary']
+# summary = r['summary']
 
 
-# In[36]:
+# In[18]:
 
-print r('summary(imp$imp)')
-
-
-# In[ ]:
+# print r('summary(imp$imp)')
 
 
+# In[19]:
+
+# print com.convert_robj(r['imp1']).DEGREE.value_counts()
+# print
+# print design.DEGREE.value_counts()
 
 
-# In[58]:
+# In[20]:
 
-print com.convert_robj(r['imp1']).DEGREE.value_counts()
-print
-print design.DEGREE.value_counts()
-
-
-# In[59]:
-
-rcode='''
-    library(mi)
-    mydf = %s
-    IMP = mi(mydf, n.imp=2, n.iter=6, max.minutes=1)
-    imp1 <- mi.data.frame(IMP, m = 1)
-''' % com.convert_to_r_dataframe(design).r_repr()
-r(rcode)
-com.convert_robj(r['imp1'])
+# rcode='''
+#     library(mi)
+#     mydf = %s
+#     IMP = mi(mydf, n.imp=2, n.iter=6, max.minutes=1)
+#     imp1 <- mi.data.frame(IMP, m = 1)
+# ''' % com.convert_to_r_dataframe(design).r_repr()
+# r(rcode)
+# com.convert_robj(r['imp1'])
 
 
-# In[60]:
+# In[45]:
 
-DV = 'GRASS'
+res=GU.runModel(dataCont, 1973, DV, article.IVs)
+
+
+# In[46]:
+
+res.summary()
+
+
+# In[43]:
+
 for year in article.GSSYearsUsed:
     design = dataCont.df.loc[year, [DV] + article.IVs]
 #     design = design.fillna(design.mean())
     formula = GU.createFormula(dataCont, design)
 #     results = smf.ols(formula2, data=design.dropna()).fit()
-    
-    #impute
-    try:
-        design.iloc[:,:] = com.convert_robj(dataCont.complete(dataCont.mice(design.values, m=1))).values
-        print 'imputing worked fine'
-    except:
-        print 'imputing didnt work'
-        print year, DV, article.IVs
+
+    if len(design.dropna()) <= design.shape[1]: 
         nominals = GU.createFormula(dataCont, design, return_nominals=True)
         non_nominals = list(set(design.columns) - set(nominals)) # list because sets are unhashable and cant be used for indices
         if len(non_nominals)>0: 
             design[non_nominals] = design[non_nominals].fillna(design[non_nominals].mean()) # the naive way
         if len(nominals)>0:
             design[nominals] = design[nominals].fillna(design[nominals].mode())
-            
+    
+    design = GU.removeConstantColumns(design.dropna())
     print smf.ols(formula, data=design.dropna()).fit().summary()
-# 
+    break
+
+
+# In[49]:
+
+print formula
+design.head()
 
 
 # In[68]:
