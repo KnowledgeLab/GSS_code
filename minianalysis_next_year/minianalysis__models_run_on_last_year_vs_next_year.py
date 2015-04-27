@@ -14,7 +14,7 @@
 # @author: Misha
 # 
 
-# In[12]:
+# In[32]:
 
 from __future__ import division
 
@@ -48,7 +48,7 @@ get_ipython().magic(u'rm ../GSSUtility.pyc # remove this file because otherwise 
 reload(GU)
 
 
-# In[ ]:
+# In[33]:
 
 #*********************************************************
 allPropsForYearsUsed = []
@@ -97,11 +97,11 @@ if __name__ == "__main__":
             
 #             log.write('id'+str(article.articleID)+' year '+str(maxYearUsed))
             
-            resOnDataUsed = GU.runModel(dataCont, maxYearUsed, DV, RHS) # models run on max year of data used
+            resOnDataUsed = GU.runModel(dataCont, maxYearUsed, DV, RHS); # models run on max year of data used
             if not resOnDataUsed: continue
             
 #             log.write('id'+str(article.articleID)+' year '+str(nextYear))           
-            resOnNextYear = GU.runModel(dataCont, nextYear, DV, RHS) # models run on min year of future data
+            resOnNextYear = GU.runModel(dataCont, nextYear, DV, RHS); # models run on min year of future data
             if not resOnNextYear: continue
             
             # Checks on which results to record                
@@ -170,7 +170,7 @@ pickle.dump(output, open('output.pickle', 'w'))
 # Create dataframe that contains the output 
 # --
 
-# In[28]:
+# In[34]:
 
 output = pickle.load(open('output.pickle'))
 group1 = 'on last GSS year'
@@ -179,7 +179,7 @@ groups = [group1, group2]
 outcomes = ['propSig', 'paramSizesNormed', 'Rs', 'adjRs', 'pvalues',  'numTotal',             'propSig_CentralVars', 'paramSizesNormed_CentralVars', 'pvalues_CentralVars']
 
 
-# In[29]:
+# In[35]:
 
 df_output = pd.DataFrame(index=np.arange(len(output[group1]['propSig'])), columns=pd.MultiIndex.from_product([groups, outcomes]))
 df_output.columns.names = ['outcome','group']
@@ -198,7 +198,7 @@ outcomes.remove('numTotal')
 print 'Number of unique articles used:', len(df_output['article_id'].unique())
 
 
-# In[30]:
+# In[36]:
 
 # if using another, non-ipython notebook method of running the code
 # load in the output of that other method, and set up the relevant variables
@@ -213,46 +213,126 @@ print 'Number of unique articles used:', len(df_output['article_id'].unique())
 # Plot the output
 # --
 
-# In[31]:
+# In[ ]:
+
+# %matplotlib inline
+
+# outcomesToUse = df_output[group1].columns
+# indices = np.arange(len(outcomesToUse))
+# width = 0.35
+# axes = plt.figure(figsize=(12,8)).add_subplot(111)
+# error_config = {'ecolor': '0.3'}
+# rects1 = plt.bar(left=indices, width=width, height=df_output[group1].mean(), color='r', 
+#                  yerr=df_output[group1].std()/np.sqrt(len(df_output[group1])), error_kw=error_config) 
+# rects2 = plt.bar(left=indices+width, width=width, height=df_output[group2].mean(), color='y', 
+#                  yerr=df_output[group2].std()/np.sqrt(len(df_output[group2])), error_kw=error_config)
+
+# # title, legend, etc
+# plt.title('Models Using Last GSS Year vs. First "Future" Year', fontsize=18)
+# plt.legend((rects1[0], rects2[0]), ('Last Yr.', '1st Future Yr.'), fontsize=15)
+# plt.xlim((-1*width, len(outcomesToUse)))
+
+# # tick labels
+# # a = outcomesToUse
+# a = ['% of coeffs. stat. sign.', 'avg. coeff. size', 'R_sq.', 'adj. R_sq.', 'avg. p-value', \
+#      '"central" vars: % of coeffs. stat. sign.', '"central" vars: avg. coeff. size', '"central" vars: avg. p-value']
+# axes.set_xticks(indices+width)
+# axes.set_xticklabels(a, rotation=90, fontsize=15)
+
+# # label the bars with the difference between them
+# diffs = (df_output[group1] - df_output[group2]).mean().values
+# def autolabel(rects):
+#     # attach some text labels
+#     for i, rect in enumerate(rects):
+#         height = rect.get_height()
+#         if i!=7 and i!=4:
+#             axes.text(rect.get_x()+width, 1.02*height, '%0.3f'%diffs[i],
+#                     ha='center', va='bottom', fontsize=15)
+#         else: # this is for the p-value label, which has gone up
+#             axes.text(rect.get_x()+width, 1.02*height+0.05, '%0.3f'%diffs[i],
+#                     ha='center', va='bottom', fontsize=15)
+# autolabel(rects1)
+
+# # savefig('../../Images/ASA2015/models_using_last_gss_year_vs_first_future_year.png', bbox_inches='tight')
+
+
+# In[46]:
 
 get_ipython().magic(u'matplotlib inline')
 
-outcomesToUse = df_output[group1].columns
-indices = np.arange(len(outcomesToUse))
-width = 0.35
-axes = plt.figure(figsize=(12,8)).add_subplot(111)
-error_config = {'ecolor': '0.3'}
-rects1 = plt.bar(left=indices, width=width, height=df_output[group1].mean(), color='r', 
-                 yerr=df_output[group1].std()/np.sqrt(len(df_output[group1])), error_kw=error_config) 
-rects2 = plt.bar(left=indices+width, width=width, height=df_output[group2].mean(), color='y', 
-                 yerr=df_output[group2].std()/np.sqrt(len(df_output[group2])), error_kw=error_config)
+# fig = plt.figure(figsize=(6,9))
+outcomesToUse = [u'adjRs',
+                 u'Rs',
+                 u'paramSizesNormed_CentralVars',                
+                 u'propSig_CentralVars', 
+                 u'paramSizesNormed',
+                 u'propSig']
 
-# title, legend, etc
-plt.title('Models Using Last GSS Year vs. First "Future" Year', fontsize=18)
-plt.legend((rects1[0], rects2[0]), ('Last Yr.', '1st Future Yr.'), fontsize=15)
-plt.xlim((-1*width, len(outcomesToUse)))
+outcomeMap = {'propSig':"% of Stat. Sign. Coeff's", 
+              'paramSizesNormed':"Standard. Size of Coeff's",
+              'Rs':'R-squared', 
+              'adjRs':'Adj. R-squared',
+#               'pvalues':"Avg. P-Value of Coeff's",
+              'propSig_CentralVars':"% of Stat. Sign. Coeff's",
+              'paramSizesNormed_CentralVars':"Standard. Size of Coeff's", 
+              'pvalues_CentralVars':"Avg. P-Value of Coeff's"}
 
-# tick labels
-# a = outcomesToUse
-a = ['% of coeffs. stat. sign.', 'avg. coeff. size', 'R_sq.', 'adj. R_sq.', 'avg. p-value',      '"central" vars: % of coeffs. stat. sign.', '"central" vars: avg. coeff. size', '"central" vars: avg. p-value']
-axes.set_xticks(indices+width)
-axes.set_xticklabels(a, rotation=90, fontsize=15)
+# indices = [1,2,4,5,7,8]
+width = 0.5
+error_config = dict(ecolor='0', lw=2, capsize=5, capthick=2)
 
-# label the bars with the difference between them
-diffs = (df_output[group1] - df_output[group2]).mean().values
-def autolabel(rects):
-    # attach some text labels
-    for i, rect in enumerate(rects):
-        height = rect.get_height()
-        if i!=7 and i!=4:
-            axes.text(rect.get_x()+width, 1.02*height, '%0.3f'%diffs[i],
-                    ha='center', va='bottom', fontsize=15)
-        else: # this is for the p-value label, which has gone up
-            axes.text(rect.get_x()+width, 1.02*height+0.05, '%0.3f'%diffs[i],
-                    ha='center', va='bottom', fontsize=15)
-autolabel(rects1)
+diffs = [100*(df_output[group1, outcome] - df_output[group2, outcome]).mean()/df_output[group1, outcome].mean() for outcome in outcomesToUse]
+diffs_strings = ['(%0.3f - %0.3f)' % (df_output[group1, outcome].mean(), df_output[group2, outcome].mean()) 
+                 for outcome in outcomesToUse]
+# naive SES
+# ses = [(df_output[group1, outcome] - df_output[group2, outcome]).std()/np.sqrt(len(df_output)) for outcome in outcomesToUse]
 
-# savefig('../../Images/ASA2015/models_using_last_gss_year_vs_first_future_year.png', bbox_inches='tight')
+# clustered SES
+clusteredSES = []
+article_ids = np.array(list(df_output.index)) 
+for outcome in outcomesToUse:
+    mask = ~np.isnan(np.array(diffs))
+    diff = 100*(df_output[group2, outcome] - df_output[group1, outcome])
+    result_clustered = smf.ols(formula='y~x-1',                      data=pd.DataFrame({'y':diff[mask], 'x':[1]*len(diff[mask])})).fit(missing='drop',                                                                              cov_type='cluster',                                                                     cov_kwds=dict(groups=article_ids[mask]))
+    clusteredSES.append(result_clustered.HC0_se[0])
+    
+colors = ['0.5' if el < 0 else '0.85' for el in diffs]
+
+# plt.barh(indices, diffs, xerr=2*np.array(clusteredSES), align='center', color=colors, error_kw=error_config)
+# axes.set_yticks(indices)
+# axes.set_yticklabels([outcomeMap[o] for o in outcomesToUse], fontsize=17)
+
+f, axarr = plt.subplots(3, sharex=True, figsize=(6,9))
+                        
+for i in range(3):
+    axarr[i].barh([0,1], diffs[i*2:i*2+2], xerr=2*np.array(clusteredSES[i*2:i*2+2]), 
+             align='center', color=colors[i*2:i*2+2], error_kw=error_config)
+    axarr[i].set_yticks([0,1])
+    axarr[i].set_yticklabels([outcomeMap[o] for o in outcomesToUse[i*2:i*2+2]], fontsize=16)
+    axarr[i].plot([0,0], [-0.5,1.5], linewidth=2, c='black', alpha=.75)    
+    axarr[i].text(abs(diffs[i*2] + 2*clusteredSES[i*2] + 2), 0, diffs_strings[i*2], fontsize=14,
+                 verticalalignment='center',
+                 bbox=dict(facecolor='white', alpha=1), style='italic')
+    axarr[i].text(abs(diffs[i*2+1] + 2*clusteredSES[i*2+1] + 2), 1, diffs_strings[i*2+1], fontsize=14,
+                 verticalalignment='center',
+                 bbox=dict(facecolor='white', alpha=1), style='italic')
+    
+    
+axarr[0].set_title('Data Substitution, Last Year vs. Next Year: (Original - Perturbed)', fontsize=20)
+axarr[0].set_ylabel('Model Fit', fontsize=19)
+axarr[1].set_ylabel('Central IVs', fontsize=19)
+axarr[2].set_ylabel('All IVs', fontsize=19)
+axarr[2].set_xlabel('Percent Change', fontsize=18)
+plt.xticks(fontsize=16)
+# plt.xlim(-10, 50)
+
+# plt.title('Original vs. Cognate Models', fontsize=20)
+# plt.xlabel('% change from original to cognate', fontsize=17)
+# plt.xticks(fontsize=15)
+
+# plt.plot([0,0], [-0.5,7.5], linewidth=2, c='black', alpha=.75)
+
+plt.savefig('images/last-vs-next--original-minus-perturbed.png', bbox_inches='tight')
 
 
 # Perform t-tests

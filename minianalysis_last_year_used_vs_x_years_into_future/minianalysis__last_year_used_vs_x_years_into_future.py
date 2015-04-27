@@ -190,7 +190,7 @@ pickle.dump(output, open('output.pickle', 'w'))
 #                     'Paired T-test of ' + outcome, ttest_rel(output[year][group1][outcome], output[year][group2][outcome])
 
 
-# In[46]:
+# In[3]:
 
 output = pickle.load(open('output.pickle'))
 group1 = 'on_last_year_of_data'
@@ -325,7 +325,7 @@ legend()
 # #NEW CODE: Plot the *differences* 
 # 
 
-# In[47]:
+# In[10]:
 
 get_ipython().magic(u'matplotlib inline')
 group1 = 'on_last_year_of_data'
@@ -346,30 +346,33 @@ outcomes = ['propSig', 'paramSizesNormed', 'Rs', 'adjRs', 'pvalues', 'numTotal',
 YEARS = range(43)
 results={}
 
-outcomeMap = {'propSig':"Proportion of Stat. Sign. Coeff's", 
+outcomeMap = {'propSig':"% of Stat. Sign. Coeff's", 
               'paramSizesNormed':"Standard. Size of Coeff's",
-              'Rs':'R_squared', 
-              'adjRs':'Adjusted R_squared',
-              'pvalues':"Average P-Value of Coeff's",
-              'propSig_CentralVars':"Cent. Var's: Proportion of Stat. Sign. Coeff's",
-              'paramSizesNormed_CentralVars':"Cent. Var's: Standard. Size of Coeff's", 
-              'pvalues_CentralVars':"Cent. Var's: Average P-Value of Coeff's"}
+              'Rs':'R-squared', 
+              'adjRs':'Adj. R-squared',
+#               'pvalues':"Avg. P-Value of Coeff's",
+              'propSig_CentralVars':"% of Stat. Sign. Coeff's",
+              'paramSizesNormed_CentralVars':"Standard. Size of Coeff's", 
+              'pvalues_CentralVars':"Avg. P-Value of Coeff's"}
 
 
-f, axarr = plt.subplots(4, 2, sharex=True)
+f, axarr = plt.subplots(nrows=3, ncols=2) # sharex=True
+f.subplots_adjust(top=1, hspace=0.5, wspace=0.05)
 axarr = axarr.flatten()
 f.set_size_inches(9,11)
 
 # just re-arranging the list of outcomes so they get plotted in the order i want
-outcomes_ordered = ['propSig', 'propSig_CentralVars',
-              'paramSizesNormed', 'paramSizesNormed_CentralVars', 
-              'pvalues','pvalues_CentralVars',
-               'Rs', 'adjRs']
+outcomes_ordered = ['Rs', 
+                    'adjRs',
+                    'paramSizesNormed_CentralVars', 
+                    'propSig_CentralVars',
+                    'paramSizesNormed', 
+                    'propSig']             
 
 for i, outcome in enumerate(outcomes_ordered):
     
     yearlyDiffs = [np.array(output[year][group2][outcome]) - np.array(output[year][group1][outcome]) for year in YEARS]  
-    yerr = [nanstd(x)/np.sqrt(len(x)) for x in yearlyDiffs]
+    yerr = [2*nanstd(x)/np.sqrt(len(x)) for x in yearlyDiffs]
     means = [nanmean(x) for x in yearlyDiffs]
 
     #for clustered errors
@@ -381,60 +384,52 @@ for i, outcome in enumerate(outcomes_ordered):
          y.extend(yearlyDiffs[yr])
     x = np.array(x)
     y = np.array(y)
-#          y_means.append(np.mean(output[yr][group2][outcome]))
 
-    #         for diffy in yearlyDiffs[j]:
-#             x.append(j)
-#             y.append(diffy)    
-            
-    # note, i'm plotting means because plotting each point makes the plot crowded,
-    # but i'm calculating the regression line on the un-aggregated data!    
-#     plot(years, means, '.', alpha=0.8)  
-
-    # i am not plotting the line below because it changes the y-axis and it's hard to see any trend!!!
-#     axarr[i].plot(x, y, '.', alpha=0.1)
-#            errorbar(years, means, yerr=yerr)
-
-#     ylabel('Change in ' + outcomeMap[outcome])
-
-    axarr[i].plot(YEARS, means, '.')
+    axarr[i].plot(YEARS, means, '.', color='0.25', alpha=0.75)
+ 
+    # the err below underestimates the error because those aren't clustered. but these are used for visualizatioiin purposes
+    # only so it doesn't matter that much
     axarr[i].errorbar(YEARS, means, yerr=yerr, linestyle='None', alpha=0.5, color='gray')
-    
-    axarr[i].set_title(outcomeMap[outcome], fontsize=14)
-    
-    # add regression line
-    formula = outcome+'~years'
-    
-    mask = ~np.isnan(y)
-    result = smf.ols(formula, data=pd.DataFrame({'years':x[mask], outcome:y[mask]}).dropna(axis=0),
-                     missing='drop').fit(cov_type='cluster', cov_kwds=dict(groups=article_indices[mask]))
-    
-    axarr[i].plot(YEARS, np.array(YEARS)*result.params[1] + result.params[0], 'r--')
 
+    # add regression line
+    mask = ~np.isnan(y)
+    result = smf.ols(formula=outcome+'~years', data=pd.DataFrame({'years':x[mask], outcome:y[mask]}).dropna(axis=0),
+                     missing='drop').fit(cov_type='cluster', cov_kwds=dict(groups=article_indices[mask]))
+    axarr[i].plot(YEARS, np.array(YEARS)*result.params[1] + result.params[0], '--', color='0', linewidth=3, alpha=0.8)
+    
+    # add error bars
+#     clusteredSES = []
+#     article_ids = np.array(list(df_output.index)) 
+#     for outcome in outcomesToUse:
+#     mask = ~np.isnan(np.array(diffs))
+#     diff = 100*(df_output[group2, outcome] - df_output[group1, outcome])
+#     result_clustered = smf.ols(formula='y~x-1', \
+#                      data=pd.DataFrame({'y':diff[mask], 'x':[1]*len(diff[mask])})).fit(missing='drop', \
+#                                                                              cov_type='cluster', \
+#                                                                     cov_kwds=dict(groups=article_ids[mask]))
+#     clusteredSES.append(result_clustered.HC0_se[0])    
+    
     # add the slope and its p-value
-    axarr[i].annotate('slope=' + str(np.around(result.params[1],4))+ ', p=' + str(np.around(result.pvalues[1],4)), 
-                      xy=(0, 0), xycoords='axes fraction', fontsize=12, ha='left', va='bottom', 
-                      xytext=(5,5), textcoords='offset points')
+    axarr[i].annotate('slope=%0.4f, p=%0.3f' % (result.params[1], result.pvalues[1]), 
+                      xy=(0, 0), xycoords='axes fraction', fontsize=14, ha='left', va='bottom', 
+                      xytext=(5,5), textcoords='offset points', bbox=dict(facecolor='white', alpha=1), style='italic')
     
     # print the intercept and its p-value for my inspection, not on the figure
     print 'intercept:'+str(result.params[0])+', '+str(result.pvalues[0])
+
+    axarr[i].set_title(outcomeMap[outcome], fontsize=14)    
     axarr[i].grid(alpha=0.5)
+#     axarr[i].set_xlim(0,42)
     
 # add title and common x-label
-f.text(0.5, 0.05, 'Years after publication', ha='center',  va='bottom',fontsize=14)
-f.text(0.5, 1-0.05, 'Outcomes x-Years Into Future', ha='center', fontsize=20)
+f.text(0.5, 0.075, 'Years after publication', ha='center',  va='bottom',fontsize=16)
+f.text(0.5, 1+0.1, 'Models Estimated on Future Data: (Original - Perturbed)', ha='center', fontsize=20)
 
-# savefig('../../Images/9-29-2014--outcomes_last_year_vs_x_years_into_future_all_8.png')
+f.text(0.5, 1+.05, 'Model Fit', ha='center', fontsize=18)
+f.text(0.5, 2/3+.05, 'Central IVs', ha='center', fontsize=18)
+f.text(0.5, 1/3+.05, 'All IVs', ha='center', fontsize=18)
 
-
-# In[44]:
-
-np.array(article_indices)[mask].shape
-
-
-# In[31]:
-
-get_ipython().magic(u'debug')
+plt.savefig('images/models-over-time.svg', bbox_inches='tight')
 
 
 # OLD CODE: Second, plot the *differences* in outcomes between last_year_used and future_year
