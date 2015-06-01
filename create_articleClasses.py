@@ -118,7 +118,7 @@
 # --
 # These are responses to the survey about each variable (in each article)
 
-# In[76]:
+# In[23]:
 
 import pandas as pd
 import cPickle as cp
@@ -132,7 +132,7 @@ from numpy import nan
 from random import sample # numpy has its own np.random.sample which works differently and overwrites "random.sample"
 
 
-# In[77]:
+# In[57]:
 
 db = MySQLdb.connect(host='klab.c3se0dtaabmj.us-west-2.rds.amazonaws.com', user='mteplitskiy', passwd="mteplitskiy", db="lanl")
 c = db.cursor()
@@ -140,28 +140,47 @@ c = db.cursor()
 
 # #Get The Variables
 
-# In[78]:
+# In[58]:
 
 c.execute('select * from gss_variable_ques')
 # c.fetchall()
 df = pd.DataFrame([el for el in c.fetchall()], columns=('userid', 'author_id', 'article_id', 'var_name', 'var_control',                                                         'var_central', 'var_dependent', 'var_independent', 'var_dontknow',                                                         'var_type_majority'))
-del df['author_id']
+# del df['author_id']
 del df['var_type_majority']
-del df['userid']
+# del df['userid']
 df.head()
 
 
-# In[79]:
+# In[59]:
 
 # convert datatypes so that I can add them to get majority
-df.var_central = df.var_central.astype(bool)
-df.var_control = df.var_control.astype(bool)
-df.var_dependent = df.var_dependent.astype(bool)
-df.var_independent = df.var_independent.astype(bool)
-df.var_dontknow = df.var_dontknow.astype(bool)
+df.var_central = df.var_central.astype(bool).astype(float)
+df.var_control = df.var_control.astype(bool).astype(float)
+df.var_dependent = df.var_dependent.astype(bool).astype(float)
+df.var_independent = df.var_independent.astype(bool).astype(float)
+df.var_dontknow = df.var_dontknow.astype(bool).astype(float)
+df.head()
 
 
-# In[80]:
+# In[60]:
+
+# weights for each coding task
+#  note user 0 gets assigned a weight of 0 because we don't want to use him/her in breaking ties
+user_id_weights_dep = {0:0, 1:0.931, 2:0.861, 3:0.652, 4:0.643, 5:0.790, 6:0.914, 7:0.828}  
+user_id_weights_indep = {0:0, 1:0.971, 2:0.985, 3:0.790, 4:0.861, 5:0.970, 6:0.928, 7:0.843}
+user_id_weights_central = {0:0, 1:0.930, 2:0.974, 3:0.874, 4:0.949, 5:0.942, 6:0.848, 7:0.900}
+user_id_weights_control = {0:0, 1:0.968, 2:0.984, 3:0.781, 4:0.854, 5:0.970, 6:0.923, 7:0.835}
+
+df['var_dep_weighted'] = df.var_dependent * df.userid.map(user_id_weights_dep)
+df['var_indep_weighted'] = df.var_independent * df.userid.map(user_id_weights_indep)
+df['var_control_weighted'] = df.var_control * df.userid.map(user_id_weights_control)
+df['var_central_weighted'] = df.var_central * df.userid.map(user_id_weights_central)
+
+# cols_to_weight = ['var_control', 'var_central', 'var_dependent', 'var_independent', 'var_dontknow']
+# df[cols_to_weight] = df[cols_to_weight] * df.weights 
+
+
+# In[61]:
 
 # TALLY THE VOTES FOR EACH VARIABLE TYPE
 df_variables = df.groupby(('article_id', 'var_name')).sum()
@@ -170,26 +189,32 @@ df_variables.head(5)
 
 # ###Create majority vote for whether variable is indep or dep
 
-# In[81]:
+# In[62]:
 
 # create a custom max function
-
-# from scipy.stats import rankdata
-
-def custom_max(s): # s is a series
-    if s['var_dependent'] > s['var_independent'] + s['var_control']:
+# def custom_max(s): # s is a series
+#     if s['var_dependent'] > s['var_independent'] + s['var_control']:
+#         return 'var_dependent'
+#     elif s['var_dependent'] < s['var_independent'] + s['var_control']:
+#         return 'var_independent'
+#     else: 
+#         return nan 
+    
+def custom_max_weighted(s): # s is a series
+    if s['var_dep_weighted'] > s['var_indep_weighted'] + s['var_control_weighted']:
         return 'var_dependent'
-    elif s['var_dependent'] < s['var_independent'] + s['var_control']:
+    elif s['var_dep_weighted'] < s['var_indep_weighted'] + s['var_control_weighted']:
         return 'var_independent'
     else: 
         return nan 
-    
-df_variables['majority_vote_type'] = df_variables.apply(custom_max, axis=1)
+
+# df_variables['majority_vote_type'] = df_variables.apply(custom_max, axis=1)
+df_variables['majority_vote_type'] = df_variables.apply(custom_max_weighted, axis=1)
 
 
 # ###Create vote for whether variable is central, ``majority_vote_central``
 
-# In[82]:
+# In[63]:
 
 #If at least one person thinks it's central, then it's central
 df_variables['majority_vote_central'] = df_variables.var_central.astype(bool)
@@ -197,40 +222,61 @@ df_variables['majority_vote_central'] = df_variables.var_central.astype(bool)
 
 # #Check how many "ties" there are on variable codes
 
-# In[83]:
+# In[64]:
 
 # there is ~1600 articles but ~22,000 rows in df_variables because each article has many variables.
 # So it appears nearly every article has a tie.
-def is_there_a_tie(s):
+# def is_there_a_tie(s):
+#     # if there is a legitimate tie
+#     if s['var_dependent'] > 0 and (s['var_dependent'] == s['var_independent'] 
+#                                    or s['var_dependent'] == s['var_independent']+s['var_control']):
+#         return 'tie: dependent == independent'
+#     elif s['var_dependent'] > s['var_independent']:
+#         return 'dep > indep'
+#     elif s['var_dependent'] < s['var_independent']:
+#         return 'dep < indep'
+#     elif s['var_dependent'] < s['var_independent'] + s['var_control']:
+#         return 'dependent < ind + control'
+#     elif s['var_dependent'] > s['var_independent'] + s['var_control']:
+#         return 'dependent > ind + control'
+#     else: 
+#         return nan     
+#unweighted output
+# dep < indep                      9625
+# dep > indep                      7392
+# tie: dependent == independent    1602
+# dependent < ind + control          33
+# dtype: int64
+
+
+def is_there_a_tie_weighted(s):
     # if there is a legitimate tie
-    if s['var_dependent'] > 0 and (s['var_dependent'] == s['var_independent'] 
-                                   or s['var_dependent'] == s['var_independent']+s['var_control']):
+    if s['var_dep_weighted'] > 0 and (s['var_dep_weighted'] == s['var_indep_weighted'] 
+                                   or s['var_dep_weighted'] == s['var_indep_weighted']+s['var_control_weighted']):
         return 'tie: dependent == independent'
-    elif s['var_dependent'] > s['var_independent']:
+    elif s['var_dep_weighted'] > s['var_indep_weighted']:
         return 'dep > indep'
-    elif s['var_dependent'] < s['var_independent']:
+    elif s['var_dep_weighted'] < s['var_indep_weighted']:
         return 'dep < indep'
-    elif s['var_dependent'] < s['var_independent'] + s['var_control']:
+    elif s['var_dep_weighted'] < s['var_indep_weighted'] + s['var_control_weighted']:
         return 'dependent < ind + control'
-    elif s['var_dependent'] > s['var_independent'] + s['var_control']:
+    elif s['var_dep_weighted'] > s['var_indep_weighted'] + s['var_control_weighted']:
         return 'dependent > ind + control'
     else: 
         return nan     
-df_variables['is_there_a_tie'] = df_variables.apply(is_there_a_tie, axis=1)
+    
+df_variables['is_there_a_tie'] = df_variables.apply(is_there_a_tie_weighted, axis=1)
+# df_variables['is_there_a_tie'] = df_variables.apply(is_there_a_tie, axis=1)
+
 print df_variables.is_there_a_tie.value_counts()
 
 
-# In[84]:
-
-df_variables[df_variables.majority_vote_type.isnull()][['majority_vote_type', 'is_there_a_tie']].head()
-
-
-# In[86]:
+# In[66]:
 
 # How many UNIQUE ARTICLES have at least one tie?
 df_var_copy = df_variables.copy()
 df_var_copy['article_id'] = df_var_copy.index.get_level_values(0)
-df_var_copy['tie'] = df_var_copy.apply(is_there_a_tie, axis=1)
+df_var_copy['tie'] = df_var_copy.apply(is_there_a_tie_weighted, axis=1)
 ids_with_tie = df_var_copy[df_var_copy.tie == 'tie: dependent == independent'].article_id.unique()
 print 'Unique articles with at least one tie:', len(ids_with_tie)
 
@@ -243,7 +289,7 @@ print 'Unique articles with at least one tie:', len(ids_with_tie)
 
 # #Get the GSS Years
 
-# In[90]:
+# In[67]:
 
 c.execute('select true_article_id, gss_years, year_published from gss_corpus')
 df_years = pd.DataFrame([el for el in c.fetchall()], columns=['article_id', 'gss_years', 'year_published'])
@@ -262,7 +308,7 @@ df_years.sort('year_published', ascending=False).head()
 
 # ###Pre-process
 
-# In[28]:
+# In[68]:
 
 GSS_YEARS = [1972, 1973, 1974, 1975, 1976, 1977, 1978, 1980, 1982,  
                  1983, 1984, 1985, 1986, 1987, 1988, 1989, 1990, 1991,
@@ -270,7 +316,7 @@ GSS_YEARS = [1972, 1973, 1974, 1975, 1976, 1977, 1978, 1980, 1982,
                  2012]
 
 
-# In[29]:
+# In[69]:
 
 def f(x):  
     x = x.replace(' ', '')
@@ -292,7 +338,7 @@ df_years.gss_years = df_years.gss_years.map(f)
 
 # ###Now parse the years strings
 
-# In[30]:
+# In[70]:
 
 def clean_years(x):
     
@@ -361,7 +407,7 @@ df_years['years_cleaned'] = df_years.gss_years.apply(clean_years)
 
 # ##Now create articleClasses list
 
-# In[57]:
+# In[71]:
 
 '''
 description: 
@@ -478,7 +524,7 @@ for article_id in article_ids: # for each article for which we have information 
     articleClasses.append(currentArticle)
 
 
-# In[58]:
+# In[72]:
 
 # save the list    
 cp.dump(articleClasses, open(pathToData + 'articleClasses.pickle', 'wb'))
@@ -486,7 +532,7 @@ cp.dump(articleClasses, open(pathToData + 'articleClasses.pickle', 'wb'))
 
 # #Let's examine articleClasses to see how much of it is usable!
 
-# In[54]:
+# In[73]:
 
 print 'Total instances:', len(articleClasses)
 print 'Skipped articles:', countOfNoGSSYearsUsed
@@ -496,7 +542,7 @@ print 'Max year published:', maxYearPublished
 
 # ##Why no years above 2005, even when imputing?
 
-# In[14]:
+# In[74]:
 
 # we don't have variables information on any of them!!!
 # (or year information, either)
@@ -512,7 +558,7 @@ for a in articles_above_2005:
 
 # ###How many articles don't have a DV and at least one IV?
 
-# In[15]:
+# In[75]:
 
 countNoDvs = 0
 countNoIvs = 0
@@ -531,7 +577,12 @@ print 'no DVs', countNoDvs
 
 # ###Take a look at some of those without DVs
 
-# In[16]:
+# In[76]:
 
 df_variables.loc[no_dvs]
+
+
+# In[ ]:
+
+
 

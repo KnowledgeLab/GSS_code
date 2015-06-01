@@ -47,16 +47,25 @@ custom_style = {'axes.facecolor': 'white',
 sb.set_style("darkgrid", rc=custom_style)
 
 
-# In[2]:
+# In[15]:
 
-get_ipython().magic(u'rm ../GSSUtility.pyc # remove this file because otherwise it will be used instead of the updated .py file')
-reload(GU)
+try :
+    get_ipython().magic(u'rm ../GSSUtility.pyc # remove this file because otherwise it will be used instead of the updated .py file')
+    reload(GU)
+except:
+    pass
 
 
 # In[ ]:
 
 if __name__ == "__main__":    
 
+    try :
+        get_ipython().magic(u'rm ../GSSUtility.pyc # remove this file because otherwise it will be used instead of the updated .py file')
+        reload(GU)
+    except:
+        pass
+    
     pathToData = '../../Data/'
     dataCont = GU.dataContainer(pathToData)
     
@@ -69,8 +78,7 @@ if __name__ == "__main__":
     group2 = 'on_future_year'    
     output = defaultdict(dict)
     groups = [group1, group2]
-    outcomes = ['propSig', 'paramSizesNormed', 'Rs', 'adjRs',  'numTotal', \ #'pvalues',
-                'propSig_CentralVars', 'paramSizesNormed_CentralVars'] #'pvalues_CentralVars'
+    outcomes = ['propSig', 'paramSizesNormed', 'Rs', 'adjRs',  'numTotal',                 'propSig_CentralVars', 'paramSizesNormed_CentralVars'] #'pvalues_CentralVars'
     
     for yr in range(43):
 #         output[yr] = {}
@@ -161,16 +169,16 @@ if __name__ == "__main__":
                         print results[i].summary()
                         raise
                     '''
-                    output[futureYear - maxYearUsed][groups[i]]['pvalues'].append(np.mean( results[i].pvalues[1:]))
+#                     output[futureYear - maxYearUsed][groups[i]]['pvalues'].append(np.mean( results[i].pvalues[1:]))
                     output[futureYear - maxYearUsed][groups[i]]['numTotal'].append( 1 ) #divide by len of R^2 array to get a mean of variables estimated PER model                           
 
                     if len(centralVars)>0:
-                        output[futureYear - maxYearUsed][groups[i]]['pvalues_CentralVars'].append(np.mean(results[i].pvalues[centralVars]))               
+#                         output[futureYear - maxYearUsed][groups[i]]['pvalues_CentralVars'].append(np.mean(results[i].pvalues[centralVars]))               
                         output[futureYear - maxYearUsed][groups[i]]['propSig_CentralVars'].append(float(len([p for p in results[i].pvalues[centralVars] if p < 0.05]))                                                                 /len(results[i].params[centralVars])) 
                         output[futureYear - maxYearUsed][groups[i]]['paramSizesNormed_CentralVars'].append(np.mean(results[i].params[centralVars].abs()))                
                     
                     else:
-                        output[futureYear - maxYearUsed][groups[i]]['pvalues_CentralVars'].append(np.nan)               
+#                         output[futureYear - maxYearUsed][groups[i]]['pvalues_CentralVars'].append(np.nan)               
                         output[futureYear - maxYearUsed][groups[i]]['propSig_CentralVars'].append(np.nan)                                                        
                         output[futureYear - maxYearUsed][groups[i]]['paramSizesNormed_CentralVars'].append(np.nan)                
 
@@ -196,7 +204,7 @@ output = pickle.load(open('output.pickle'))
 group1 = 'on_last_year_of_data'
 group2 = 'on_future_year'    
 groups = [group1, group2]
-outcomes = ['propSig', 'paramSizesNormed', 'Rs', 'adjRs', 'pvalues', 'numTotal',             'propSig_CentralVars', 'paramSizesNormed_CentralVars', 'pvalues_CentralVars']
+outcomes = ['propSig', 'paramSizesNormed', 'Rs', 'adjRs', 'numTotal',             'propSig_CentralVars', 'paramSizesNormed_CentralVars'] # 'pvalues', 'pvalues_CentralVars'
 
 # info on the articles used
 all_articles = []
@@ -325,7 +333,7 @@ legend()
 # #NEW CODE: Plot the *differences* 
 # 
 
-# In[10]:
+# In[20]:
 
 get_ipython().magic(u'matplotlib inline')
 group1 = 'on_last_year_of_data'
@@ -346,12 +354,12 @@ outcomes = ['propSig', 'paramSizesNormed', 'Rs', 'adjRs', 'pvalues', 'numTotal',
 YEARS = range(43)
 results={}
 
-outcomeMap = {'propSig':"% of Stat. Sign. Coeff's", 
+outcomeMap = {'propSig':"Prop. of Stat. Sign. Coeff's", 
               'paramSizesNormed':"Standard. Size of Coeff's",
               'Rs':'R-squared', 
               'adjRs':'Adj. R-squared',
 #               'pvalues':"Avg. P-Value of Coeff's",
-              'propSig_CentralVars':"% of Stat. Sign. Coeff's",
+              'propSig_CentralVars':"Prop. of Stat. Sign. Coeff's",
               'paramSizesNormed_CentralVars':"Standard. Size of Coeff's", 
               'pvalues_CentralVars':"Avg. P-Value of Coeff's"}
 
@@ -429,7 +437,7 @@ f.text(0.5, 1+.05, 'Model Fit', ha='center', fontsize=18)
 f.text(0.5, 2/3+.05, 'Central IVs', ha='center', fontsize=18)
 f.text(0.5, 1/3+.05, 'All IVs', ha='center', fontsize=18)
 
-plt.savefig('images/models-over-time.svg', bbox_inches='tight')
+plt.savefig('images/models-over-time.png', bbox_inches='tight', dpi=150)
 
 
 # OLD CODE: Second, plot the *differences* in outcomes between last_year_used and future_year

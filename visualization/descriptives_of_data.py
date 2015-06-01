@@ -111,7 +111,7 @@
 # --
 # These are responses to the survey about each variable (in each article)
 
-# In[15]:
+# In[138]:
 
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -126,17 +126,17 @@ import MySQLdb
 from random import sample # numpy has its own np.random.sample which works differently and overwrites "random.sample"
 
 
-# In[13]:
+# In[139]:
 
 get_ipython().magic(u'matplotlib inline')
 
 
-# In[18]:
+# In[141]:
 
-sns.axes_style()
+# sns.axes_style
 
 
-# In[2]:
+# In[142]:
 
 custom_style = {'axes.facecolor': 'white',
                 'grid.color': '0.15',
@@ -144,25 +144,25 @@ custom_style = {'axes.facecolor': 'white',
 sns.set_style("darkgrid", rc=custom_style)
 
 
-# In[7]:
+# In[143]:
 
 # things moved to '  mysql -h 'klab.c3se0dtaabmj.us-west-2.rds.amazonaws.com'   -u mteplitskiy -p' per email with W. Catino 2015-02-09
 db = MySQLdb.connect(host='klab.c3se0dtaabmj.us-west-2.rds.amazonaws.com', user='mteplitskiy', passwd="mteplitskiy", db="lanl")
 c = db.cursor()
 
 
-# In[ ]:
+# In[144]:
 
 c.execute('select gss_years, year_published from gss_corpus')
 df = pd.DataFrame([el for el in c.fetchall()], columns=['gss_years_used', 'year_published'])
 
 
-# In[163]:
+# In[145]:
 
 df.year_published[df.year_published == 0] = nan
 
 
-# In[165]:
+# In[146]:
 
 df[df.year_published.notnull()].gss_years_used.value_counts()
 
@@ -170,12 +170,12 @@ df[df.year_published.notnull()].gss_years_used.value_counts()
 # According to he below, there seems to be a sizable number of articles published > 2005
 # --
 
-# In[87]:
+# In[147]:
 
 df[df.year_published.notnull()].groupby('year_published').count().head()
 
 
-# In[86]:
+# In[148]:
 
 grouped = df[df.year_published.notnull()].groupby('year_published')
 grouped.get_group(2004).head()
@@ -211,7 +211,7 @@ grouped = df.groupby('yearpublished')
 # 
 # Note: This is using articleClasses, which consists of only articles that survived a fair amount of filtering. 
 
-# In[59]:
+# In[135]:
 
 grouped['aid'].count().plot(style='s-', c='0.25', linewidth=2)
 # legend(fontsize=15)
@@ -220,10 +220,10 @@ plt.title('Articles per Year', fontsize=18)
 plt.xlabel('Year published', fontsize=15)
 plt.ylabel('Number of articles', fontsize=15)
 plt.xticks(fontsize=14)
-# savefig('../../images/9-4-2014--articles-per-year.jpg')
+plt.savefig('../../Images/descriptives/descriptives--articles-per-year.png', bbox_inches='tight')
 
 
-# In[74]:
+# In[133]:
 
 plt.figure(figsize=(6,4))
 # grouped.mean()[['dvs', 'ivs', 'controls', 'total']].plot()
@@ -234,20 +234,30 @@ ses = pd.rolling_std(grouped.sum(), window=3, axis=0)
 pd.rolling_mean(means.dvs, window=3).plot(label="Dependent var's", linewidth=2, style='o-', c='0.25') 
 pd.rolling_mean(means.ivs, window=3).plot( label="Independent var's", linewidth=2, style='o-.', c='0.25')
 # plot(means.index, means['total'], '--', linewidth=1, label="All var's")
-plt.legend(fontsize=15, loc='best')
-plt.xlim((1974, 2005))
+plt.legend(fontsize=14, loc='best')
+plt.xlim((1974, 2006))
+plt.xticks(fontsize=14)
 plt.title('Variables per Article over Time', fontsize=18)
 plt.xlabel('Year published', fontsize=15)
 plt.ylabel('Variables per article', fontsize=15)
-# plt.savefig('../../images/variables_per_article_over_time.jpg')
+plt.savefig('../../Images/descriptives/descriptives--variables_per_article_over_time.png', bbox_inches='tight')
 
 
-# In[101]:
+# In[136]:
 
+# SAMPLE SIZE OVER TIME
 years = np.unique(dataCont.df.index)
 sample_sizes = [np.sum(dataCont.df.index==year) for year in years]
 plt.plot(years, sample_sizes, 'o-', color='0.25', linewidth=2)
+plt.title('Sample Size over Time', fontsize=18)
+plt.xlabel('Year published', fontsize=15)
+plt.ylabel('Sample size, n', fontsize=15)
+# plt.xlim((1974, 2006))
+plt.xticks(fontsize=14)
+ax = plt.gca()
+ax.set_xticks(range(1970, 2015, 7))
 plt.ylim(0,4600)
+plt.savefig('../../Images/descriptives/descriptives--sample size over time.svg', bbox_inches='tight')
 
 
 # #Descriptives of Model Outcomes

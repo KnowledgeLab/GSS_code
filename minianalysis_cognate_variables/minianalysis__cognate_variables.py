@@ -1,7 +1,7 @@
 
 # coding: utf-8
 
-# In[193]:
+# In[4]:
 
 # filename: minianalysis__cognate_variables.py
 # 
@@ -50,6 +50,12 @@ reload(GU)
 # In[ ]:
 
 if __name__ == "__main__":    
+
+    try:
+        get_ipython().magic(u'rm ../GSSUtility.pyc # remove this file because otherwise it will be used instead of the updated .py file')
+        reload(GU)
+    except:
+        pass
     
     pathToData = '../../Data/'
     dataCont = GU.dataContainer(pathToData)
@@ -73,6 +79,7 @@ if __name__ == "__main__":
             
     
     articlesToUse = GU.filterArticles(dataCont.articleClasses, GSSYearsUsed=True, GSSYearsPossible=False,                                       centralIVs=True, linearModels=False) 
+    
     print 'Articles to use:', len(articlesToUse)
 
 #     for article in random.sample(articlesToUse, 200):
@@ -247,8 +254,9 @@ pickle.dump(output, open('output.pickle', 'w'))
 
 
 
-# In[10]:
+# In[25]:
 
+get_ipython().magic(u'matplotlib inline')
 output = pickle.load(open('output.pickle'))
 group1 = 'original model'
 group2 = 'cognate model'   
@@ -256,7 +264,7 @@ groups = [group1, group2]
 outcomes = ['propSig', 'paramSizesNormed', 'Rs', 'adjRs', 'pvalues',  'numTotal',             'propSig_CentralVars', 'paramSizesNormed_CentralVars', 'pvalues_CentralVars']
 
 
-# In[11]:
+# In[26]:
 
 df_output = pd.DataFrame(index=np.arange(len(output[group1]['propSig'])), columns=pd.MultiIndex.from_product([groups, outcomes]))
 df_output.columns.names = ['outcome','group']
@@ -270,7 +278,7 @@ print 'Using %f models from %f articles' % (len(df_output), len(df_output.index.
 # df_output.to_pickle('df_output.pickle')
 
 
-# In[189]:
+# In[22]:
 
 # %matplotlib inline
 # #Plot outcomes - (new) distribution of differences approach
@@ -326,19 +334,25 @@ for outcome in outcomes:
 # <markdowncell>
 
 
-# In[268]:
+# In[69]:
 
+# ONE EXAMPLE OF DIFFERENCES IN DISTRIBUTION: PROP OF STAT. SIGN. EFFECTS FOR CENTRAL VARS
 plt.figure(figsize=(8,6))
 sb.kdeplot(df_output[group1, 'propSig_CentralVars'], color='0.3', shade=True, label='Original', linewidth=3)
 plt.plot([df_output[group1, 'propSig_CentralVars'].mean()]*2, [0,2], '--', c='0.3', linewidth=3, label='Original mean')
 sb.kdeplot(df_output[group2, 'propSig_CentralVars'], color='0.5', shade=True, label='Perturbed', linewidth=3)
 plt.plot([df_output[group2, 'propSig_CentralVars'].mean()]*2, [0,2], '--', c='0.5', linewidth=3, label='Perturbed mean')
 plt.legend(loc='best', fontsize=15)
-plt.title('Variable Substitution: Original vs. Perturbed', fontsize=20)
-# plt.xlim(-.1, .1)
+plt.title('Prop. of Central Effects with p < 0.05', fontsize=18)
+plt.xlabel('Proportion of Stat. Sign. Effects', fontsize=15)
+plt.ylabel('Density', fontsize=15)
+plt.xlim(0, 1)
+plt.xticks(fontsize=15)
+plt.yticks(fontsize=15)
+plt.savefig('images/cognate-example-of-differences-in-distributions-prop-sign-of-central-effects.png', bbox_inches='tight', dpi=150)
 
 
-# In[269]:
+# In[10]:
 
 # # #Plot outcomes - (old) bar chart approach
 # %matplotlib inline
@@ -398,7 +412,15 @@ plt.title('Variable Substitution: Original vs. Perturbed', fontsize=20)
 # # <markdowncell>
 
 
-# In[302]:
+# In[23]:
+
+# #temp fix to convert proportions into percentages
+# for group in [group1, group2]:
+#     for o in ['propSig', 'propSig_CentralVars']:
+#         df_output[group, o] = df_output[group, o]/100
+
+
+# In[68]:
 
 get_ipython().magic(u'matplotlib inline')
 
@@ -410,12 +432,12 @@ outcomesToUse = [u'adjRs',
                  u'paramSizesNormed',
                  u'propSig']
 
-outcomeMap = {'propSig':"% of Stat. Sign. Coeff's", 
+outcomeMap = {'propSig':"Prop. of Stat. Sign. Coeff's", 
               'paramSizesNormed':"Standard. Size of Coeff's",
               'Rs':'R-squared', 
               'adjRs':'Adj. R-squared',
 #               'pvalues':"Avg. P-Value of Coeff's",
-              'propSig_CentralVars':"% of Stat. Sign. Coeff's",
+              'propSig_CentralVars':"Prop. of Stat. Sign. Coeff's",
               'paramSizesNormed_CentralVars':"Standard. Size of Coeff's", 
               'pvalues_CentralVars':"Avg. P-Value of Coeff's"}
 
@@ -423,9 +445,11 @@ outcomeMap = {'propSig':"% of Stat. Sign. Coeff's",
 width = 0.5
 error_config = dict(ecolor='0', lw=2, capsize=5, capthick=2)
 
-diffs = [100*(df_output[group1, outcome] - df_output[group2, outcome]).mean()/df_output[group1, outcome].mean() for outcome in outcomesToUse]
+diffs = [100*(df_output[group2, outcome] - df_output[group1, outcome]).mean()/df_output[group1, outcome].mean() for outcome in outcomesToUse]
 diffs_strings = ['(%0.3f - %0.3f)' % (df_output[group1, outcome].mean(), df_output[group2, outcome].mean()) 
                  for outcome in outcomesToUse]
+diffs = np.array(diffs)
+
 # naive SES
 # ses = [(df_output[group1, outcome] - df_output[group2, outcome]).std()/np.sqrt(len(df_output)) for outcome in outcomesToUse]
 
@@ -433,11 +457,12 @@ diffs_strings = ['(%0.3f - %0.3f)' % (df_output[group1, outcome].mean(), df_outp
 clusteredSES = []
 article_ids = np.array(list(df_output.index)) 
 for outcome in outcomesToUse:
-    mask = ~np.isnan(np.array(diffs))
     diff = 100*(df_output[group2, outcome] - df_output[group1, outcome])
+    mask = ~np.isnan(np.array(diff))
     result_clustered = smf.ols(formula='y~x-1',                      data=pd.DataFrame({'y':diff[mask], 'x':[1]*len(diff[mask])})).fit(missing='drop',                                                                              cov_type='cluster',                                                                     cov_kwds=dict(groups=article_ids[mask]))
     clusteredSES.append(result_clustered.HC0_se[0])
-    
+clusteredSES = np.array(clusteredSES)
+
 colors = ['0.5' if el < 0 else '0.85' for el in diffs]
 
 # plt.barh(indices, diffs, xerr=2*np.array(clusteredSES), align='center', color=colors, error_kw=error_config)
@@ -447,18 +472,27 @@ colors = ['0.5' if el < 0 else '0.85' for el in diffs]
 f, axarr = plt.subplots(3, sharex=True, figsize=(6,9))
                         
 for i in range(3):
-    axarr[i].barh([0,1], diffs[i*2:i*2+2], xerr=2*np.array(clusteredSES[i*2:i*2+2]), 
+    # bars
+    xerr = 2*clusteredSES[i*2:i*2+2] / diffs[i*2:i*2+2] # i am dividing here because we want the SEs to be on the percent-change scale, not raw scale
+    boxes = axarr[i].barh([0,1], diffs[i*2:i*2+2], xerr=xerr, 
              align='center', color=colors[i*2:i*2+2], error_kw=error_config)
+   
+    # annotate boxes: raw means
+    box0_xcoord = boxes[0].get_bbox().get_points()[1,0] + 2 # the indices here mean get the x-coord of 2nd box corner
+    box1_xcoord = boxes[1].get_bbox().get_points()[1,0] + 2
+
+    axarr[i].text(box0_xcoord, 0, diffs_strings[i*2], fontsize=14,
+                 verticalalignment='center',
+                 bbox=dict(facecolor='white', alpha=1), style='italic')
+    axarr[i].text(box1_xcoord, 1, diffs_strings[i*2+1], fontsize=14,
+                 verticalalignment='center',
+                 bbox=dict(facecolor='white', alpha=1), style='italic')
+
+    #labels for y-axis
     axarr[i].set_yticks([0,1])
     axarr[i].set_yticklabels([outcomeMap[o] for o in outcomesToUse[i*2:i*2+2]], fontsize=16)
     axarr[i].plot([0,0], [-0.5,1.5], linewidth=2, c='black', alpha=.75)    
-    axarr[i].text(abs(diffs[i*2] + 2*clusteredSES[i*2] + 2) if i!=1 else 2, 0, diffs_strings[i*2], fontsize=14,
-                 verticalalignment='center',
-                 bbox=dict(facecolor='white', alpha=1), style='italic')
-    axarr[i].text(abs(diffs[i*2+1] + 2*clusteredSES[i*2+1] + 2), 1, diffs_strings[i*2+1], fontsize=14,
-                 verticalalignment='center',
-                 bbox=dict(facecolor='white', alpha=1), style='italic')
-    
+ 
     
 axarr[0].set_title('Variable Substitution: (Original - Perturbed)', fontsize=20)
 axarr[0].set_ylabel('Model Fit', fontsize=19)
@@ -466,6 +500,7 @@ axarr[1].set_ylabel('Central IVs', fontsize=19)
 axarr[2].set_ylabel('All IVs', fontsize=19)
 axarr[2].set_xlabel('Percent Change', fontsize=18)
 plt.xticks(fontsize=16)
+plt.xlim(-27,6)
 
 # plt.title('Original vs. Cognate Models', fontsize=20)
 # plt.xlabel('% change from original to cognate', fontsize=17)
@@ -473,7 +508,13 @@ plt.xticks(fontsize=16)
 
 # plt.plot([0,0], [-0.5,7.5], linewidth=2, c='black', alpha=.75)
 
-plt.savefig('images/cognate--original-minus-perturbed.svg', bbox_inches='tight')
+plt.savefig('images/cognate--original-minus-perturbed.png', bbox_inches='tight', dpi=150)
+
+
+# In[60]:
+
+box = rects[0].get_bbox()
+box.
 
 
 # In[124]:

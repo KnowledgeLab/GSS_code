@@ -60,6 +60,12 @@ allRsForYearsUsed, allRsForYearsPossible = [], []
  
 ############################################################
 if __name__ == "__main__":    
+
+    try:
+        get_ipython().magic(u'rm ../GSSUtility.pyc # remove this file because otherwise it will be used instead of the updated .py file')
+        reload(GU)
+    except:
+        pass
     
     pathToData = '../../Data/'
     dataCont = GU.dataContainer(pathToData)
@@ -170,7 +176,7 @@ pickle.dump(output, open('output.pickle', 'w'))
 # Create dataframe that contains the output 
 # --
 
-# In[34]:
+# In[60]:
 
 output = pickle.load(open('output.pickle'))
 group1 = 'on last GSS year'
@@ -179,7 +185,7 @@ groups = [group1, group2]
 outcomes = ['propSig', 'paramSizesNormed', 'Rs', 'adjRs', 'pvalues',  'numTotal',             'propSig_CentralVars', 'paramSizesNormed_CentralVars', 'pvalues_CentralVars']
 
 
-# In[35]:
+# In[61]:
 
 df_output = pd.DataFrame(index=np.arange(len(output[group1]['propSig'])), columns=pd.MultiIndex.from_product([groups, outcomes]))
 df_output.columns.names = ['outcome','group']
@@ -256,7 +262,7 @@ print 'Number of unique articles used:', len(df_output['article_id'].unique())
 # # savefig('../../Images/ASA2015/models_using_last_gss_year_vs_first_future_year.png', bbox_inches='tight')
 
 
-# In[46]:
+# In[58]:
 
 get_ipython().magic(u'matplotlib inline')
 
@@ -268,12 +274,12 @@ outcomesToUse = [u'adjRs',
                  u'paramSizesNormed',
                  u'propSig']
 
-outcomeMap = {'propSig':"% of Stat. Sign. Coeff's", 
+outcomeMap = {'propSig':"Prop. of Stat. Sign. Coeff's", 
               'paramSizesNormed':"Standard. Size of Coeff's",
               'Rs':'R-squared', 
               'adjRs':'Adj. R-squared',
 #               'pvalues':"Avg. P-Value of Coeff's",
-              'propSig_CentralVars':"% of Stat. Sign. Coeff's",
+              'propSig_CentralVars':"Prop. of Stat. Sign. Coeff's",
               'paramSizesNormed_CentralVars':"Standard. Size of Coeff's", 
               'pvalues_CentralVars':"Avg. P-Value of Coeff's"}
 
@@ -281,9 +287,11 @@ outcomeMap = {'propSig':"% of Stat. Sign. Coeff's",
 width = 0.5
 error_config = dict(ecolor='0', lw=2, capsize=5, capthick=2)
 
-diffs = [100*(df_output[group1, outcome] - df_output[group2, outcome]).mean()/df_output[group1, outcome].mean() for outcome in outcomesToUse]
+diffs = [100*(df_output[group2, outcome] - df_output[group1, outcome]).mean()/df_output[group1, outcome].mean() for outcome in outcomesToUse]
 diffs_strings = ['(%0.3f - %0.3f)' % (df_output[group1, outcome].mean(), df_output[group2, outcome].mean()) 
                  for outcome in outcomesToUse]
+diffs = np.array(diffs)
+
 # naive SES
 # ses = [(df_output[group1, outcome] - df_output[group2, outcome]).std()/np.sqrt(len(df_output)) for outcome in outcomesToUse]
 
@@ -291,11 +299,12 @@ diffs_strings = ['(%0.3f - %0.3f)' % (df_output[group1, outcome].mean(), df_outp
 clusteredSES = []
 article_ids = np.array(list(df_output.index)) 
 for outcome in outcomesToUse:
-    mask = ~np.isnan(np.array(diffs))
     diff = 100*(df_output[group2, outcome] - df_output[group1, outcome])
+    mask = ~np.isnan(np.array(diff))
     result_clustered = smf.ols(formula='y~x-1',                      data=pd.DataFrame({'y':diff[mask], 'x':[1]*len(diff[mask])})).fit(missing='drop',                                                                              cov_type='cluster',                                                                     cov_kwds=dict(groups=article_ids[mask]))
     clusteredSES.append(result_clustered.HC0_se[0])
-    
+clusteredSES = np.array(clusteredSES)
+
 colors = ['0.5' if el < 0 else '0.85' for el in diffs]
 
 # plt.barh(indices, diffs, xerr=2*np.array(clusteredSES), align='center', color=colors, error_kw=error_config)
@@ -305,18 +314,26 @@ colors = ['0.5' if el < 0 else '0.85' for el in diffs]
 f, axarr = plt.subplots(3, sharex=True, figsize=(6,9))
                         
 for i in range(3):
-    axarr[i].barh([0,1], diffs[i*2:i*2+2], xerr=2*np.array(clusteredSES[i*2:i*2+2]), 
+    # bars
+    xerr = 2*clusteredSES[i*2:i*2+2] / diffs[i*2:i*2+2] # i am dividing here because we want the SEs to be on the percent-change scale, not raw scale
+    boxes = axarr[i].barh([0,1], diffs[i*2:i*2+2], xerr=xerr, 
              align='center', color=colors[i*2:i*2+2], error_kw=error_config)
+
+    # annotate boxes: raw means
+    box0_xcoord = boxes[0].get_bbox().get_points()[1,0] + .5 # the indices here mean get the x-coord of 2nd box corner
+    box1_xcoord = boxes[1].get_bbox().get_points()[1,0] + .5
+
+    axarr[i].text(box0_xcoord, 0, diffs_strings[i*2], fontsize=14,
+                 verticalalignment='center',
+                 bbox=dict(facecolor='white', alpha=1), style='italic')
+    axarr[i].text(box1_xcoord, 1, diffs_strings[i*2+1], fontsize=14,
+                 verticalalignment='center',
+                 bbox=dict(facecolor='white', alpha=1), style='italic')
+
+    #labels for y-axis
     axarr[i].set_yticks([0,1])
     axarr[i].set_yticklabels([outcomeMap[o] for o in outcomesToUse[i*2:i*2+2]], fontsize=16)
-    axarr[i].plot([0,0], [-0.5,1.5], linewidth=2, c='black', alpha=.75)    
-    axarr[i].text(abs(diffs[i*2] + 2*clusteredSES[i*2] + 2), 0, diffs_strings[i*2], fontsize=14,
-                 verticalalignment='center',
-                 bbox=dict(facecolor='white', alpha=1), style='italic')
-    axarr[i].text(abs(diffs[i*2+1] + 2*clusteredSES[i*2+1] + 2), 1, diffs_strings[i*2+1], fontsize=14,
-                 verticalalignment='center',
-                 bbox=dict(facecolor='white', alpha=1), style='italic')
-    
+    axarr[i].plot([0,0], [-0.5,1.5], linewidth=2, c='black', alpha=.75)        
     
 axarr[0].set_title('Data Substitution, Last Year vs. Next Year: (Original - Perturbed)', fontsize=20)
 axarr[0].set_ylabel('Model Fit', fontsize=19)
@@ -332,7 +349,7 @@ plt.xticks(fontsize=16)
 
 # plt.plot([0,0], [-0.5,7.5], linewidth=2, c='black', alpha=.75)
 
-plt.savefig('images/last-vs-next--original-minus-perturbed.png', bbox_inches='tight')
+plt.savefig('images/last-vs-next--original-minus-perturbed.png', bbox_inches='tight', dpi=150)
 
 
 # Perform t-tests
