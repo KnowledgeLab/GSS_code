@@ -254,7 +254,7 @@ pickle.dump(output, open('output.pickle', 'w'))
 
 
 
-# In[25]:
+# In[74]:
 
 get_ipython().magic(u'matplotlib inline')
 output = pickle.load(open('output.pickle'))
@@ -264,7 +264,7 @@ groups = [group1, group2]
 outcomes = ['propSig', 'paramSizesNormed', 'Rs', 'adjRs', 'pvalues',  'numTotal',             'propSig_CentralVars', 'paramSizesNormed_CentralVars', 'pvalues_CentralVars']
 
 
-# In[26]:
+# In[75]:
 
 df_output = pd.DataFrame(index=np.arange(len(output[group1]['propSig'])), columns=pd.MultiIndex.from_product([groups, outcomes]))
 df_output.columns.names = ['outcome','group']
@@ -334,7 +334,7 @@ for outcome in outcomes:
 # <markdowncell>
 
 
-# In[69]:
+# In[82]:
 
 # ONE EXAMPLE OF DIFFERENCES IN DISTRIBUTION: PROP OF STAT. SIGN. EFFECTS FOR CENTRAL VARS
 plt.figure(figsize=(8,6))
@@ -420,7 +420,7 @@ plt.savefig('images/cognate-example-of-differences-in-distributions-prop-sign-of
 #         df_output[group, o] = df_output[group, o]/100
 
 
-# In[68]:
+# In[92]:
 
 get_ipython().magic(u'matplotlib inline')
 
@@ -494,13 +494,13 @@ for i in range(3):
     axarr[i].plot([0,0], [-0.5,1.5], linewidth=2, c='black', alpha=.75)    
  
     
-axarr[0].set_title('Variable Substitution: (Original - Perturbed)', fontsize=20)
+axarr[0].set_title('Variable Substitution: (Perturbed - Original)', fontsize=20)
 axarr[0].set_ylabel('Model Fit', fontsize=19)
 axarr[1].set_ylabel('Central IVs', fontsize=19)
 axarr[2].set_ylabel('All IVs', fontsize=19)
 axarr[2].set_xlabel('Percent Change', fontsize=18)
 plt.xticks(fontsize=16)
-plt.xlim(-27,6)
+plt.xlim(-32,6)
 
 # plt.title('Original vs. Cognate Models', fontsize=20)
 # plt.xlabel('% change from original to cognate', fontsize=17)
@@ -513,8 +513,8 @@ plt.savefig('images/cognate--original-minus-perturbed.png', bbox_inches='tight',
 
 # In[60]:
 
-box = rects[0].get_bbox()
-box.
+# box = rects[0].get_bbox()
+# box.
 
 
 # In[124]:

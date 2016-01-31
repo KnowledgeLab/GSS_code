@@ -176,7 +176,7 @@ pickle.dump(output, open('output.pickle', 'w'))
 # Create dataframe that contains the output 
 # --
 
-# In[60]:
+# In[67]:
 
 output = pickle.load(open('output.pickle'))
 group1 = 'on last GSS year'
@@ -185,7 +185,7 @@ groups = [group1, group2]
 outcomes = ['propSig', 'paramSizesNormed', 'Rs', 'adjRs', 'pvalues',  'numTotal',             'propSig_CentralVars', 'paramSizesNormed_CentralVars', 'pvalues_CentralVars']
 
 
-# In[61]:
+# In[68]:
 
 df_output = pd.DataFrame(index=np.arange(len(output[group1]['propSig'])), columns=pd.MultiIndex.from_product([groups, outcomes]))
 df_output.columns.names = ['outcome','group']
@@ -204,7 +204,7 @@ outcomes.remove('numTotal')
 print 'Number of unique articles used:', len(df_output['article_id'].unique())
 
 
-# In[36]:
+# In[69]:
 
 # if using another, non-ipython notebook method of running the code
 # load in the output of that other method, and set up the relevant variables
@@ -219,7 +219,7 @@ print 'Number of unique articles used:', len(df_output['article_id'].unique())
 # Plot the output
 # --
 
-# In[ ]:
+# In[70]:
 
 # %matplotlib inline
 
@@ -262,7 +262,16 @@ print 'Number of unique articles used:', len(df_output['article_id'].unique())
 # # savefig('../../Images/ASA2015/models_using_last_gss_year_vs_first_future_year.png', bbox_inches='tight')
 
 
-# In[58]:
+# In[77]:
+
+print outcomesToUse
+print 
+print diffs
+print
+print diffs_strings
+
+
+# In[74]:
 
 get_ipython().magic(u'matplotlib inline')
 
@@ -335,7 +344,7 @@ for i in range(3):
     axarr[i].set_yticklabels([outcomeMap[o] for o in outcomesToUse[i*2:i*2+2]], fontsize=16)
     axarr[i].plot([0,0], [-0.5,1.5], linewidth=2, c='black', alpha=.75)        
     
-axarr[0].set_title('Data Substitution, Last Year vs. Next Year: (Original - Perturbed)', fontsize=20)
+axarr[0].set_title('Data Substitution, Last Year vs. Next Year: (Perturbed - Original)', fontsize=20)
 axarr[0].set_ylabel('Model Fit', fontsize=19)
 axarr[1].set_ylabel('Central IVs', fontsize=19)
 axarr[2].set_ylabel('All IVs', fontsize=19)
@@ -349,7 +358,7 @@ plt.xticks(fontsize=16)
 
 # plt.plot([0,0], [-0.5,7.5], linewidth=2, c='black', alpha=.75)
 
-plt.savefig('images/last-vs-next--original-minus-perturbed.png', bbox_inches='tight', dpi=150)
+plt.savefig('images/last-vs-next--original-minus-perturbed.svg', bbox_inches='tight', dpi=150)
 
 
 # Perform t-tests

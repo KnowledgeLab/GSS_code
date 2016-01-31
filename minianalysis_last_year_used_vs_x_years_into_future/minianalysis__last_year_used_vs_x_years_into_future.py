@@ -198,7 +198,7 @@ pickle.dump(output, open('output.pickle', 'w'))
 #                     'Paired T-test of ' + outcome, ttest_rel(output[year][group1][outcome], output[year][group2][outcome])
 
 
-# In[3]:
+# In[21]:
 
 output = pickle.load(open('output.pickle'))
 group1 = 'on_last_year_of_data'
@@ -333,7 +333,7 @@ legend()
 # #NEW CODE: Plot the *differences* 
 # 
 
-# In[20]:
+# In[24]:
 
 get_ipython().magic(u'matplotlib inline')
 group1 = 'on_last_year_of_data'
@@ -431,13 +431,13 @@ for i, outcome in enumerate(outcomes_ordered):
     
 # add title and common x-label
 f.text(0.5, 0.075, 'Years after publication', ha='center',  va='bottom',fontsize=16)
-f.text(0.5, 1+0.1, 'Models Estimated on Future Data: (Original - Perturbed)', ha='center', fontsize=20)
+f.text(0.5, 1+0.1, 'Models Estimated on Future Data: (Perturbed - Original)', ha='center', fontsize=20)
 
 f.text(0.5, 1+.05, 'Model Fit', ha='center', fontsize=18)
 f.text(0.5, 2/3+.05, 'Central IVs', ha='center', fontsize=18)
 f.text(0.5, 1/3+.05, 'All IVs', ha='center', fontsize=18)
 
-plt.savefig('images/models-over-time.png', bbox_inches='tight', dpi=150)
+plt.savefig('images/models-over-time.svg', bbox_inches='tight', dpi=150)
 
 
 # OLD CODE: Second, plot the *differences* in outcomes between last_year_used and future_year

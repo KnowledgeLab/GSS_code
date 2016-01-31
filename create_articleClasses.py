@@ -118,7 +118,7 @@
 # --
 # These are responses to the survey about each variable (in each article)
 
-# In[23]:
+# In[210]:
 
 import pandas as pd
 import cPickle as cp
@@ -132,27 +132,31 @@ from numpy import nan
 from random import sample # numpy has its own np.random.sample which works differently and overwrites "random.sample"
 
 
-# In[57]:
+# In[83]:
 
 db = MySQLdb.connect(host='klab.c3se0dtaabmj.us-west-2.rds.amazonaws.com', user='mteplitskiy', passwd="mteplitskiy", db="lanl")
 c = db.cursor()
 
 
-# #Get The Variables
+# #Old approach - weighted majority vote
+# ###Get The Variables
 
-# In[58]:
+# In[147]:
 
+# OLD APPROACH
 c.execute('select * from gss_variable_ques')
 # c.fetchall()
 df = pd.DataFrame([el for el in c.fetchall()], columns=('userid', 'author_id', 'article_id', 'var_name', 'var_control',                                                         'var_central', 'var_dependent', 'var_independent', 'var_dontknow',                                                         'var_type_majority'))
-# del df['author_id']
+del df['author_id']
 del df['var_type_majority']
+df = df.drop_duplicates() # because some rows seem to be repeated, e.g. article 703, var_name INCOME
 # del df['userid']
-df.head()
+# df.head()
 
 
-# In[59]:
+# In[149]:
 
+# OLD APPROACH
 # convert datatypes so that I can add them to get majority
 df.var_central = df.var_central.astype(bool).astype(float)
 df.var_control = df.var_control.astype(bool).astype(float)
@@ -165,11 +169,12 @@ df.head()
 # In[60]:
 
 # weights for each coding task
-#  note user 0 gets assigned a weight of 0 because we don't want to use him/her in breaking ties
-user_id_weights_dep = {0:0, 1:0.931, 2:0.861, 3:0.652, 4:0.643, 5:0.790, 6:0.914, 7:0.828}  
-user_id_weights_indep = {0:0, 1:0.971, 2:0.985, 3:0.790, 4:0.861, 5:0.970, 6:0.928, 7:0.843}
-user_id_weights_central = {0:0, 1:0.930, 2:0.974, 3:0.874, 4:0.949, 5:0.942, 6:0.848, 7:0.900}
-user_id_weights_control = {0:0, 1:0.968, 2:0.984, 3:0.781, 4:0.854, 5:0.970, 6:0.923, 7:0.835}
+# these weights are from weighting coders' responses only on those items that do not include the codes of User 0
+# User 0 breaks the estimates because he has so few responses (nothing to compare him to).
+user_id_weights_dev = {1:0.984, 2:0.988, 3:0.696, 4:0.867, 5:0.97, 6:0.933, 7:0.798}
+user_id_weights_ind = {1:0.656, 2:0.962, 3:0.869, 4:0.888, 5:0.936, 6:0.529, 7:0.934}
+user_id_weights_central = {1:0.993, 2:0.892, 3:0.68, 4:0.593, 5:0.785, 6:0.952, 7:0.613}
+user_id_weights_control = {1:0.654, 2:0.962, 3:0.868, 4:0.887, 5:0.936, 6:0.528, 7:0.935}
 
 df['var_dep_weighted'] = df.var_dependent * df.userid.map(user_id_weights_dep)
 df['var_indep_weighted'] = df.var_independent * df.userid.map(user_id_weights_indep)
@@ -220,9 +225,9 @@ df_variables['majority_vote_type'] = df_variables.apply(custom_max_weighted, axi
 df_variables['majority_vote_central'] = df_variables.var_central.astype(bool)
 
 
-# #Check how many "ties" there are on variable codes
+# ###Check how many "ties" there are on variable codes
 
-# In[64]:
+# In[170]:
 
 # there is ~1600 articles but ~22,000 rows in df_variables because each article has many variables.
 # So it appears nearly every article has a tie.
@@ -270,9 +275,6 @@ df_variables['is_there_a_tie'] = df_variables.apply(is_there_a_tie_weighted, axi
 
 print df_variables.is_there_a_tie.value_counts()
 
-
-# In[66]:
-
 # How many UNIQUE ARTICLES have at least one tie?
 df_var_copy = df_variables.copy()
 df_var_copy['article_id'] = df_var_copy.index.get_level_values(0)
@@ -281,7 +283,90 @@ ids_with_tie = df_var_copy[df_var_copy.tie == 'tie: dependent == independent'].a
 print 'Unique articles with at least one tie:', len(ids_with_tie)
 
 
-# In[88]:
+
+# #New approach using posteriors
+
+# In[211]:
+
+df_posterior = pd.read_csv('../Data/posterior_estimates_of_variable_types.csv', index_col=0)
+df_posterior.head(20)
+
+
+# In[212]:
+
+# get the majority type
+type_dict = {0:'var_dependent', 1:'var_independent', 2:'var_control'}
+df_posterior['posterior_type'] = [type_dict[el] for el in np.argmax(df_posterior[['dep_var_true', 'ind_var_true', 'control_var_true']].values, axis=1)]
+
+# get central
+df_posterior['posterior_central'] = df_posterior.central_var_true >= 0.5
+
+# there are 455 cases where posterior_central==True and posterior_type==var_control. df_posterior.loc[(df_posterior.posterior_central==True) & (df_posterior.posterior_type=='var_control')]
+# We are going to assume that "central" status trumps "control vs. IV" status.
+
+df_posterior.head()
+
+
+# In[ ]:
+
+
+
+
+# In[213]:
+
+### COMPARE DISTRIBUTION OF VARIABLES BY METHOD
+
+print 'Old (Weighted Majority Vote) method'
+print '-----------------------------------'
+print df_variables.majority_vote_type.value_counts()
+print
+print 'Central?'
+print df_variables.majority_vote_central.value_counts()
+print
+print
+print 'New (Posterior) Method'
+print '--------------------------------------'
+print df_posterior.posterior_type.value_counts()
+print
+print 'Central?'
+print df_posterior.posterior_central.value_counts()
+
+
+# ##Compare User 0's codes and Posterior codes
+
+# In[215]:
+
+combined_dfs = df[df.userid==0].merge(df_posterior, left_on=('article_id', 'var_name'), right_on=('true_article_id', 'var_name'))
+# combined_dfs.head()
+
+# from scipy.stats import pearsonr
+
+# print 'Correlations between User 0 and Posterior Estimates'
+# print '----------------------------------------------'
+# print 'Dependent correlation:', pearsonr(combined_dfs.var_dependent, combined_dfs.posterior_type == 'var_dependent')[0]
+# print 'Independent correlation:', pearsonr(combined_dfs.var_independent, combined_dfs.posterior_type == 'var_independent')[0]
+# print 'Control correlation:', pearsonr(combined_dfs.var_control, combined_dfs.posterior_type == 'var_control')[0]
+# print 'Central correlation:', pearsonr(combined_dfs.var_central, combined_dfs.posterior_central == True)[0]
+
+# output
+'''
+Correlations between User 0 and Posterior Estimates
+----------------------------------------------
+Dependent correlation: 0.644396551724
+Independent correlation: 0.426704807965
+Control correlation: 0.630871934624
+Central correlation: 0.424640648454
+'''
+
+# The correlations are high enough and the user0 has coded few enough items that we're going to ingore his ratings.
+
+
+# In[ ]:
+
+
+
+
+# In[216]:
 
 #How many articles will be *gained* by resolving ties?
 #df_var_copy[df_var_copy.article_id.isin(ids_with_tie)].majority_vote_type == 'var_dependent'
@@ -289,7 +374,7 @@ print 'Unique articles with at least one tie:', len(ids_with_tie)
 
 # #Get the GSS Years
 
-# In[67]:
+# In[217]:
 
 c.execute('select true_article_id, gss_years, year_published from gss_corpus')
 df_years = pd.DataFrame([el for el in c.fetchall()], columns=['article_id', 'gss_years', 'year_published'])
@@ -301,14 +386,9 @@ del df_years['article_id']
 df_years.sort('year_published', ascending=False).head()
 
 
-# In[ ]:
-
-
-
-
 # ###Pre-process
 
-# In[68]:
+# In[218]:
 
 GSS_YEARS = [1972, 1973, 1974, 1975, 1976, 1977, 1978, 1980, 1982,  
                  1983, 1984, 1985, 1986, 1987, 1988, 1989, 1990, 1991,
@@ -316,7 +396,7 @@ GSS_YEARS = [1972, 1973, 1974, 1975, 1976, 1977, 1978, 1980, 1982,
                  2012]
 
 
-# In[69]:
+# In[219]:
 
 def f(x):  
     x = x.replace(' ', '')
@@ -338,7 +418,7 @@ df_years.gss_years = df_years.gss_years.map(f)
 
 # ###Now parse the years strings
 
-# In[70]:
+# In[220]:
 
 def clean_years(x):
     
@@ -407,7 +487,12 @@ df_years['years_cleaned'] = df_years.gss_years.apply(clean_years)
 
 # ##Now create articleClasses list
 
-# In[71]:
+# In[ ]:
+
+
+
+
+# In[229]:
 
 '''
 description: 
@@ -455,25 +540,35 @@ countImputed = 0
 
 # CONSTRUCT articleCLasses LIST
 articleClasses = []
-article_ids = df_variables.index.levels[0]
-for article_id in article_ids: # for each article for which we have information on its variables...
-    
-    # if articleID not in GSS_CENTRAL_VARIABLE or not GSS_CENTRAL_VARIABLE[articleID]:continue
-    
-    # sub-dataframe just for this article (original is a multiindex (article, variable name)). 
-    # article_df has rows like (var name, metadata columns)
-    article_df = df_variables.loc[article_id]
-    
-    ### VARIABLES
-    # get all variable types for the article 
-    IVs =  article_df[article_df.majority_vote_type == 'var_independent'].index
-    DVs =  article_df[article_df.majority_vote_type == 'var_dependent'].index
-    # currently the line below is uesless, because majority_vote_type is never var_control
-    controls =  article_df[article_df.majority_vote_type == 'var_control'].index
-    centralIVs =  article_df[np.array(article_df.majority_vote_type == 'var_independent')                              & np.array(article_df.majority_vote_central == True)].index
+# article_ids = df_variables.index.levels[0]
 
+for article_id in df_posterior.true_article_id.unique(): # for each article for which we have information on its variables...
+    
+#     # if articleID not in GSS_CENTRAL_VARIABLE or not GSS_CENTRAL_VARIABLE[articleID]:continue
+    
+#     # sub-dataframe just for this article (original is a multiindex (article, variable name)). 
+#     # article_df has rows like (var name, metadata columns)
+#     article_df = df_variables.loc[article_id]  
+    article_df = df_posterior[df_posterior.true_article_id == article_id]
+    
+#     ### VARIABLES
+#     # get all variable types for the article 
+#     IVs =  article_df[article_df.majority_vote_type == 'var_independent'].index
+#     DVs =  article_df[article_df.majority_vote_type == 'var_dependent'].index
+#     # currently the line below is uesless, because majority_vote_type is never var_control
+#     controls =  article_df[article_df.majority_vote_type == 'var_control'].index
+#     centralIVs =  article_df[np.array(article_df.majority_vote_type == 'var_independent') \
+#                              & np.array(article_df.majority_vote_central == True)].index
     # uncomment later!
-#     make sure there is at least one DV and at least one IV
+    
+    # VARIABLES
+    IVs = article_df.loc[article_df.posterior_type == 'var_independent', 'var_name'].tolist()
+    DVs = article_df.loc[article_df.posterior_type == 'var_dependent', 'var_name'].tolist()
+    controls = article_df.loc[article_df.posterior_type == 'var_control', 'var_name'].tolist()
+    # Note: "central" status trumps "control" status. So a control that's central becomes a central.
+    centralIVs = article_df.loc[(article_df.posterior_central==True) &                                 ((article_df.posterior_type == 'var_independent') |                                 (article_df.posterior_type == 'var_control')), 'var_name'].tolist()   
+    
+    # make sure there is at least one DV and at least one IV
     if len(DVs) == 0 or len(IVs) == 0: continue
         
     # convert all variable names to upper case
@@ -481,8 +576,7 @@ for article_id in article_ids: # for each article for which we have information 
     DVs = map(str.upper, DVs)
     controls = map(str.upper, controls)
     centralIVs = map(str.upper, centralIVs)
-    
-    
+        
     ### YEARS
     # this function is used to impute GSSYearsUsed for articles for which we have variable information but not 
     # GSS_years_used information
@@ -524,15 +618,20 @@ for article_id in article_ids: # for each article for which we have information 
     articleClasses.append(currentArticle)
 
 
-# In[72]:
+# In[230]:
 
 # save the list    
 cp.dump(articleClasses, open(pathToData + 'articleClasses.pickle', 'wb'))
 
 
+# In[228]:
+
+centralIVs.tolist()
+
+
 # #Let's examine articleClasses to see how much of it is usable!
 
-# In[73]:
+# In[224]:
 
 print 'Total instances:', len(articleClasses)
 print 'Skipped articles:', countOfNoGSSYearsUsed
@@ -541,6 +640,8 @@ print 'Max year published:', maxYearPublished
 
 
 # ##Why no years above 2005, even when imputing?
+# 
+# This analysis is in a different notebook but basically the problem is we don't have information on variables or years.
 
 # In[74]:
 
@@ -558,7 +659,7 @@ for a in articles_above_2005:
 
 # ###How many articles don't have a DV and at least one IV?
 
-# In[75]:
+# In[225]:
 
 countNoDvs = 0
 countNoIvs = 0
@@ -573,13 +674,6 @@ for a in articleClasses:
         no_ivs.append(a.articleID)
 print 'no IVs', countNoIvs
 print 'no DVs', countNoDvs 
-
-
-# ###Take a look at some of those without DVs
-
-# In[76]:
-
-df_variables.loc[no_dvs]
 
 
 # In[ ]:
