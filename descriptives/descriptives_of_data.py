@@ -144,17 +144,33 @@ custom_style = {'axes.facecolor': 'white',
 sns.set_style("darkgrid", rc=custom_style)
 
 
-# In[5]:
+# In[16]:
 
 # things moved to '  mysql -h 'klab.c3se0dtaabmj.us-west-2.rds.amazonaws.com'   -u mteplitskiy -p' per email with W. Catino 2015-02-09
 db = MySQLdb.connect(host='klab.c3se0dtaabmj.us-west-2.rds.amazonaws.com', user='mteplitskiy', passwd="mteplitskiy", db="lanl")
 c = db.cursor()
 
 
-# In[6]:
+# In[17]:
 
 c.execute('select gss_years, year_published from gss_corpus')
 df = pd.DataFrame([el for el in c.fetchall()], columns=['gss_years_used', 'year_published'])
+
+
+# In[24]:
+
+c.execute('select true_article_id, author_1_last_name, year_published, title from gss_corpus')
+df = pd.DataFrame([el for el in c.fetchall()], columns=['true_article_id', 
+                                                        'author_1_last_name', 
+                                                        'year_published',
+                                                        'title'])
+
+df.to_csv('../../Data/true_article_id_name_year_title_ALL.csv')
+
+
+# In[23]:
+
+pwd
 
 
 # In[7]:
@@ -183,7 +199,7 @@ grouped.get_group(2004).head()
 
 # # Number of variables over time
 
-# In[11]:
+# In[9]:
 
 pathToData = '../../Data/'
 dataCont = GU.dataContainer(pathToData)
@@ -388,9 +404,4 @@ for outcome in df_output.columns:
 
 #     df_output[outcome].hist(bins=30)
 #     savefig('../../Images/descriptives--' + outcome + '.svg', bbox_inches='tight')
-
-
-# In[ ]:
-
-
 

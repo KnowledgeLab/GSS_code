@@ -14,7 +14,7 @@
 # @author: Misha
 # 
 
-# In[2]:
+# In[32]:
 
 from __future__ import division
 
@@ -42,13 +42,13 @@ custom_style = {'axes.facecolor': 'white',
 sb.set_style("darkgrid", rc=custom_style)
 
 
-# In[ ]:
+# In[13]:
 
 get_ipython().magic(u'rm ../GSSUtility.pyc # remove this file because otherwise it will be used instead of the updated .py file')
 reload(GU)
 
 
-# In[ ]:
+# In[33]:
 
 #*********************************************************
 allPropsForYearsUsed = []
@@ -176,7 +176,7 @@ pickle.dump(output, open('output.pickle', 'w'))
 # Create dataframe that contains the output 
 # --
 
-# In[5]:
+# In[67]:
 
 output = pickle.load(open('output.pickle'))
 group1 = 'on last GSS year'
@@ -185,7 +185,7 @@ groups = [group1, group2]
 outcomes = ['propSig', 'paramSizesNormed', 'Rs', 'adjRs', 'pvalues',  'numTotal',             'propSig_CentralVars', 'paramSizesNormed_CentralVars', 'pvalues_CentralVars']
 
 
-# In[6]:
+# In[68]:
 
 df_output = pd.DataFrame(index=np.arange(len(output[group1]['propSig'])), columns=pd.MultiIndex.from_product([groups, outcomes]))
 df_output.columns.names = ['outcome','group']
@@ -204,15 +204,7 @@ outcomes.remove('numTotal')
 print 'Number of unique articles used:', len(df_output['article_id'].unique())
 
 
-# In[15]:
-
-# output article IDs for use in replication project. 2016-06-07
-fout = open('minianalysis_next_year_list_of_articles_used.csv',  'wb')
-fout.write(','.join(map(str, sorted(df_output.article_id.unique())))) # unique article IDs used, separated by commas
-fout.close()
-
-
-# In[ ]:
+# In[69]:
 
 # if using another, non-ipython notebook method of running the code
 # load in the output of that other method, and set up the relevant variables
@@ -270,13 +262,13 @@ fout.close()
 # # savefig('../../Images/ASA2015/models_using_last_gss_year_vs_first_future_year.png', bbox_inches='tight')
 
 
-# In[3]:
+# In[77]:
 
-# print outcomesToUse
-# print 
-# print diffs
-# print
-# print diffs_strings
+print outcomesToUse
+print 
+print diffs
+print
+print diffs_strings
 
 
 # In[74]:

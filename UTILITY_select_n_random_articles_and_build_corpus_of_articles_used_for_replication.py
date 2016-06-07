@@ -134,7 +134,7 @@ sample_i = sample(suitable_articles, 50)
 # the model type that designates regressions...
 
 
-# In[9]:
+# In[8]:
 
 all_articles = [a.articleID for a in filterArticles(articleClasses, 
                                   GSSYearsUsed=True, 
@@ -151,7 +151,7 @@ linear_articles = [a.articleID for a in filterArticles(articleClasses,
                                   linearModels=True)]
 
 
-# In[17]:
+# In[9]:
 
 data = []
 for a in all_articles:
@@ -160,15 +160,48 @@ for a in all_articles:
 all_articles = pd.DataFrame(data, columns=['true_article_id', 'uses_linear_models'])
 
 
-# In[22]:
+# In[10]:
 
 titles = pd.read_csv('../Data/true_article_id_name_year_title_ALL.csv', index_col=0)
 titles.index = titles.true_article_id
 titles.head()
 
 
-# In[28]:
+# In[11]:
 
 all_articles_and_titles = pd.merge(left=all_articles, right=titles, on='true_article_id')
+
+
+# In[25]:
+
+file_articles_from_next = open('minianalysis_next_year/minianalysis_next_year_list_of_articles_used.csv', 'rb').read()
+articles_from_next = map(int, file_articles_from_next.split(','))
+
+file_articles_from_cognate = open('minianalysis_cognate_variables/minianalysis_cognate_variables_list_of_articles_used.csv', 'rb').read()
+articles_from_cognate = map(int, file_articles_from_cognate.split(','))
+
+file_articles_from_x_years = open('minianalysis_last_year_used_vs_x_years_into_future/minianalysis_x_years_list_of_articles_used.csv', 'rb').read()
+articles_from_x_years = map(int, file_articles_from_x_years.split(','))
+
+
+# In[26]:
+
+all_articles_and_titles['used_in_last_vs_next'] = False
+all_articles_and_titles.loc[all_articles_and_titles.true_article_id.isin(articles_from_next), 'used_in_last_vs_next'] = True
+
+all_articles_and_titles['used_in_cognate'] = False
+all_articles_and_titles.loc[all_articles_and_titles.true_article_id.isin(articles_from_cognate), 'used_in_cognate'] = True
+
+all_articles_and_titles['used_in_x_years_into_future'] = False
+all_articles_and_titles.loc[all_articles_and_titles.true_article_id.isin(articles_from_x_years), 'used_in_x_years_into_future'] = True
+
+
+# In[27]:
+
+all_articles_and_titles
+
+
+# In[28]:
+
 all_articles_and_titles.to_csv('../Data/all_articles_linear_models_and_titles.csv', index=False)
 

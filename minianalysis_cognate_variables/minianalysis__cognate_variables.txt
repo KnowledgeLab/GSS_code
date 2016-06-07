@@ -1,8 +1,4 @@
 
-# coding: utf-8
-
-# In[2]:
-
 # filename: minianalysis__cognate_variables.py
 # 
 # description: Runs models as specified originally and again after replacing a central variable by a cognate variable.
@@ -40,19 +36,13 @@ custom_style = {'axes.facecolor': 'white',
                 'grid.linestyle':'-.'}
 sb.set_style("darkgrid", rc=custom_style)
 
-
-# In[ ]:
-
-get_ipython().magic(u'rm ../GSSUtility.pyc # remove this file because otherwise it will be used instead of the updated .py file')
+%rm ../GSSUtility.pyc # remove this file because otherwise it will be used instead of the updated .py file
 reload(GU)
-
-
-# In[ ]:
 
 if __name__ == "__main__":    
 
     try:
-        get_ipython().magic(u'rm ../GSSUtility.pyc # remove this file because otherwise it will be used instead of the updated .py file')
+        %rm ../GSSUtility.pyc # remove this file because otherwise it will be used instead of the updated .py file
         reload(GU)
     except:
         pass
@@ -70,7 +60,8 @@ if __name__ == "__main__":
     group1 = 'original model'
     group2 = 'cognate model'   
     groups = [group1, group2]
-    outcomes = ['propSig', 'paramSizesNormed', 'Rs', 'adjRs', 'pvalues',  'numTotal',                 'propSig_CentralVars', 'paramSizesNormed_CentralVars', 'pvalues_CentralVars']
+    outcomes = ['propSig', 'paramSizesNormed', 'Rs', 'adjRs', 'pvalues',  'numTotal', \
+                'propSig_CentralVars', 'paramSizesNormed_CentralVars', 'pvalues_CentralVars']
     output = defaultdict(dict)
     output['metadata'] = {'article_id':[]}
     for group in groups:
@@ -78,7 +69,8 @@ if __name__ == "__main__":
             output[group][outcome] = []
             
     
-    articlesToUse = GU.filterArticles(dataCont.articleClasses, GSSYearsUsed=True, GSSYearsPossible=False,                                       centralIVs=True, linearModels=False) 
+    articlesToUse = GU.filterArticles(dataCont.articleClasses, GSSYearsUsed=True, GSSYearsPossible=False, \
+                                      centralIVs=True, linearModels=False) 
     
     print 'Articles to use:', len(articlesToUse)
 
@@ -175,7 +167,8 @@ if __name__ == "__main__":
 
                     if len(centralVars)>0:
                         output[groups[i]]['pvalues_CentralVars'].append(np.mean(results[i].pvalues[centralVars]))               
-                        output[groups[i]]['propSig_CentralVars'].append(float(len([p for p in results[i].pvalues[centralVars] if p < 0.05]))                                                                 /len(results[i].params[centralVars])) 
+                        output[groups[i]]['propSig_CentralVars'].append(float(len([p for p in results[i].pvalues[centralVars] if p < 0.05])) \
+                                                                /len(results[i].params[centralVars])) 
                         output[groups[i]]['paramSizesNormed_CentralVars'].append(np.mean(results[i].params[centralVars].abs()))                
                     else:
                         output[groups[i]]['pvalues_CentralVars'].append(nan)               
@@ -243,8 +236,6 @@ pickle.dump(output, open('output.pickle', 'w'))
 # --
 
 
-# In[ ]:
-
 # import pickle
 # group1 = 'original model'
 # group2 = 'cognate model'   
@@ -254,16 +245,13 @@ pickle.dump(output, open('output.pickle', 'w'))
 
 
 
-# In[3]:
-
+%matplotlib inline
 output = pickle.load(open('output.pickle'))
 group1 = 'original model'
 group2 = 'cognate model'   
 groups = [group1, group2]
-outcomes = ['propSig', 'paramSizesNormed', 'Rs', 'adjRs', 'pvalues',  'numTotal',             'propSig_CentralVars', 'paramSizesNormed_CentralVars', 'pvalues_CentralVars']
-
-
-# In[4]:
+outcomes = ['propSig', 'paramSizesNormed', 'Rs', 'adjRs', 'pvalues',  'numTotal', \
+            'propSig_CentralVars', 'paramSizesNormed_CentralVars', 'pvalues_CentralVars']
 
 df_output = pd.DataFrame(index=np.arange(len(output[group1]['propSig'])), columns=pd.MultiIndex.from_product([groups, outcomes]))
 df_output.columns.names = ['outcome','group']
@@ -276,18 +264,7 @@ del df_output[group2, 'numTotal']
 print 'Using %f models from %f articles' % (len(df_output), len(df_output.index.unique()))
 # df_output.to_pickle('df_output.pickle')
 
-
-# In[7]:
-
-# output article IDs for use in replication project. 2016-06-07
-fout = open('minianalysis_cognate_variables_list_of_articles_used.csv',  'wb')
-fout.write(','.join(map(str, sorted(df_output.index.unique())))) # unique article IDs used, separated by commas
-fout.close()
-
-
-# In[22]:
-
-get_ipython().magic(u'matplotlib inline')
+# %matplotlib inline
 # #Plot outcomes - (new) distribution of differences approach
 # df_output = pd.read_pickle('df_output.pickle')
 # <codecell>
@@ -340,9 +317,6 @@ for outcome in outcomes:
 
 # <markdowncell>
 
-
-# In[82]:
-
 # ONE EXAMPLE OF DIFFERENCES IN DISTRIBUTION: PROP OF STAT. SIGN. EFFECTS FOR CENTRAL VARS
 plt.figure(figsize=(8,6))
 sb.kdeplot(df_output[group1, 'propSig_CentralVars'], color='0.3', shade=True, label='Original', linewidth=3)
@@ -357,9 +331,6 @@ plt.xlim(0, 1)
 plt.xticks(fontsize=15)
 plt.yticks(fontsize=15)
 plt.savefig('images/cognate-example-of-differences-in-distributions-prop-sign-of-central-effects.png', bbox_inches='tight', dpi=150)
-
-
-# In[10]:
 
 # # #Plot outcomes - (old) bar chart approach
 # %matplotlib inline
@@ -418,18 +389,12 @@ plt.savefig('images/cognate-example-of-differences-in-distributions-prop-sign-of
 
 # # <markdowncell>
 
-
-# In[23]:
-
 # #temp fix to convert proportions into percentages
 # for group in [group1, group2]:
 #     for o in ['propSig', 'propSig_CentralVars']:
 #         df_output[group, o] = df_output[group, o]/100
 
-
-# In[92]:
-
-get_ipython().magic(u'matplotlib inline')
+%matplotlib inline
 
 # fig = plt.figure(figsize=(6,9))
 outcomesToUse = [u'adjRs',
@@ -466,7 +431,10 @@ article_ids = np.array(list(df_output.index))
 for outcome in outcomesToUse:
     diff = 100*(df_output[group2, outcome] - df_output[group1, outcome])
     mask = ~np.isnan(np.array(diff))
-    result_clustered = smf.ols(formula='y~x-1',                      data=pd.DataFrame({'y':diff[mask], 'x':[1]*len(diff[mask])})).fit(missing='drop',                                                                              cov_type='cluster',                                                                     cov_kwds=dict(groups=article_ids[mask]))
+    result_clustered = smf.ols(formula='y~x-1', \
+                     data=pd.DataFrame({'y':diff[mask], 'x':[1]*len(diff[mask])})).fit(missing='drop', \
+                                                                             cov_type='cluster', \
+                                                                    cov_kwds=dict(groups=article_ids[mask]))
     clusteredSES.append(result_clustered.HC0_se[0])
 clusteredSES = np.array(clusteredSES)
 
@@ -517,14 +485,8 @@ plt.xlim(-32,6)
 
 plt.savefig('images/cognate--original-minus-perturbed.png', bbox_inches='tight', dpi=150)
 
-
-# In[60]:
-
 # box = rects[0].get_bbox()
 # box.
-
-
-# In[124]:
 
 # Perform t-tests and Tests using *clustered errors*
 # --
@@ -577,7 +539,10 @@ for outcome in outcomes:
 #     result = smf.ols(formula='y~x', data=pd.DataFrame({'y':outcomes_combined, 'x':dummy})).fit() # do I need a constant???
 #     result = smf.ols(formula='y~x-1', data=pd.DataFrame({'y':diffs, 'x':[1]*len(diffs)})).fit()
     mask = ~np.isnan(np.array(diffs))
-    result_clustered = smf.ols(formula='y~x-1',                      data=pd.DataFrame({'y':diffs[mask], 'x':[1]*len(diffs[mask])})).fit(missing='drop',                                                                              cov_type='cluster',                                                                     cov_kwds=dict(groups=article_ids[mask]))
+    result_clustered = smf.ols(formula='y~x-1', \
+                     data=pd.DataFrame({'y':diffs[mask], 'x':[1]*len(diffs[mask])})).fit(missing='drop', \
+                                                                             cov_type='cluster', \
+                                                                    cov_kwds=dict(groups=article_ids[mask]))
                                                                                                
 # these two methods produce slightly different results. neither is necessary because i'm using parameters
 # of the model.fit() method above instead to use clustered standard errors.
@@ -616,14 +581,7 @@ print 'count:', df_output[group2, 'pvalues'][df_output[group2, 'pvalues'] > 0.05
 print 'total:', df_output.shape[0]
 print 'percent:', df_output[group2, 'pvalues'][df_output[group2, 'pvalues'] > 0.05].shape[0]/ df_output.shape[0]
 
-
-# In[133]:
-
 print outcome
 print result_clustered.HC0_se
-
-
-# In[ ]:
-
 
 

@@ -47,7 +47,7 @@ custom_style = {'axes.facecolor': 'white',
 sb.set_style("darkgrid", rc=custom_style)
 
 
-# In[15]:
+# In[ ]:
 
 try :
     get_ipython().magic(u'rm ../GSSUtility.pyc # remove this file because otherwise it will be used instead of the updated .py file')
@@ -198,7 +198,7 @@ pickle.dump(output, open('output.pickle', 'w'))
 #                     'Paired T-test of ' + outcome, ttest_rel(output[year][group1][outcome], output[year][group2][outcome])
 
 
-# In[21]:
+# In[4]:
 
 output = pickle.load(open('output.pickle'))
 group1 = 'on_last_year_of_data'
@@ -211,6 +211,14 @@ all_articles = []
 for yr in range(43):
     all_articles.extend(output[yr]['metadata']['articleID'])
 print 'Num of unique articles used:', len(set(all_articles))
+
+
+# In[5]:
+
+# output article IDs for use in replication project. 2016-06-07
+fout = open('minianalysis_x_years_list_of_articles_used.csv',  'wb')
+fout.write(','.join(map(str, sorted(set(all_articles))))) # unique article IDs used, separated by commas
+fout.close()
 
 
 # #Plot outcomes x years into future

@@ -35,7 +35,7 @@ if __name__ == '__main__':
 # df_vartypes['PARTYID']
 
 
-# In[13]:
+# In[1]:
 
 '''
 Created on Wed Apr 02, 2014
@@ -73,6 +73,8 @@ import random # note, scipy.random.choice doesn't work even though it ought to b
 # import rpy2
 # import pandas.rpy.common as com
 
+# DEFINE CONSTANTS
+MAX_LEVELS_OF_CAT_VARIABLE = 10
 
 GSS_YEARS = [1972, 1973, 1974, 1975, 1976, 1977, 1978, 
             1980, 1982, 1983, 1984, 1985, 1986, 1987, 1988, 1989, 
@@ -234,7 +236,7 @@ def createFormula(dataCont, design, return_nominals=False):
     # LHS (dep. variable type)
     # check to make sure the DV is not 'DONOTUSE' or a categorical
     DV = design.columns[0]
-    if DV not in dataCont.variableTypes: formula = 'standardize('+ DV +', ddof=1) ~ ' 
+    if DV not in dataCont.variableTypes: formula = 'standardize('+ DV +') ~ ' 
     else:
         varType = dataCont.variableTypes[DV]
         if varType == 'DONOTUSE' and not return_nominals:
@@ -244,7 +246,7 @@ def createFormula(dataCont, design, return_nominals=False):
 #             print 'DV %s is categorical with more than 2 categories' % DV
             return None
         else:
-            formula = 'standardize('+ DV +', ddof=1) ~ ' 
+            formula = 'standardize('+ DV +') ~ ' 
 
     # RHS (right-hand side)
     for col in design.columns[1:]: # don't include the DV in the RHS (the DV is the first element)!
@@ -258,8 +260,8 @@ def createFormula(dataCont, design, return_nominals=False):
                 continue
                 
             elif type(varType) == int:
-                if varType > 15: # if >15 levels
-                    print 'categorical variable %s has more than 15 levels' % col
+                if varType > MAX_LEVELS_OF_CAT_VARIABLE: # A variable defined at the beginning of script that limits how many levels a categorical variable is allowed to have (some, like region, will have dozens of levels)
+                    print 'categorical variable %s has more than %d levels' % (col, MAX_LEVELS_OF_CAT_VARIABLE)
                 else: 
                     formula += 'C('+ col + ') + '        
                     nominals.append(col)
@@ -302,23 +304,27 @@ def matrixrank(A,tol=1e-2):
     s = np.linalg.svd(A,compute_uv=0)
     return sum( np.where( s>tol, 1, 0 ) )
 
-def runModel(dataCont, year, DV, IVs, controls=[]):
+def runModel(dataCont, year, DV, IVs, controls=[], custom_data=None):
     '''  
     inputs:
       - the year of GSS to use
       - Dependent Variable (just 1)
       - list of independent and control variables
+      - custom_data = a Pandas Dataframe with a custom GSS dataset. This will be used by "run_specific_article_on_current_data" Notebook where I will provide (a subset of) the GSS data that was used in some publication
       
     outputs:
       if: OLS model estimation was possible, return results data structure from statsmodels OLS. 
           results contains methods like .summary() and .pvalues
       else: return None 
     '''
-    design = df.loc[year, [DV] + IVs + controls]
+    if custom_data is None:
+        design = df.loc[year, [DV] + IVs + controls]
+    else:
+        design = custom_data.loc[year, [DV] + IVs + controls]
+        
     design = design.astype(float) # again because R messes up for ints
 #    design.index = range(len(design)) # using R for imputation messes up when the index is all the same values (year)
          
-    #IMPUTE MISSING VALUES
 #     try:
         
 #         # MI version
@@ -341,6 +347,8 @@ def runModel(dataCont, year, DV, IVs, controls=[]):
 
     # check if we need to impute at all. if number of complete cases <= number of variables, then impute
 #     if design.dropna().shape[0] <= design.shape[1]:
+
+    # IMPUTE MISSING VALUES (in the naive way, with mode [nominal variables] and mean [continuous variables]
     nominals = createFormula(dataCont, design, return_nominals=True)
     non_nominals = list(set(design.columns) - set(nominals)) # list because sets are unhashable and cant be used for indices
     if len(non_nominals)>0: 
