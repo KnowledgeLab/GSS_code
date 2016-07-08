@@ -159,7 +159,6 @@ class dataContainer:
             self.df = globals()['df']
             
         
-        
 def removeMissingValues(design, axis=0):
     '''
     Description: Goes through each column in DataFrame and replaces its missing values with np.nan.
@@ -216,12 +215,13 @@ def removeConstantColumns(design):
     
     return design
     
-def createFormula(dataCont, design, return_nominals=False):
+def createFormula(dataCont, design, return_nominals=False, standardize=True):
     '''
     Takes the design matrix (where first column is DV)
     and creates a formula for Pandas/Statsmodels using the dict of variableTypes,
-    where I've coded some variables as being categorical (and specified how many levels)
-    some as continuous, and some as DONOTUSE
+    where I've coded some variables as being categorical (and specified how many levels [answer choices] they have)
+    some as continuous, and some as DONOTUSE (at the moment, 2016-07-08, I cannot remember what DONOTUSE is about.. 
+    but I think norc-coding-scheme code variable is one such DONOTUSE variable, because it's not used in the model specification in the paper, presumably)
     codes:
         C = continuous, CL = continuous-like (no difference betw. this and "C")
         number = categorical, where number is the number of levels
@@ -229,6 +229,10 @@ def createFormula(dataCont, design, return_nominals=False):
        
     return_nominals: default=False
         if True, returns a list of variables that are nominal (=categorical); doesn't return the formula
+        
+    standardize=True: this is used for running models for the replication analysis, so that we can compare the returned 
+        coefficients to the published (unstandardized) ones. So, standardize by default (for our mini-analyses for the paper), but do not 
+        standardize for the replication analysis.        
     '''
     
     nominals = []
@@ -236,7 +240,15 @@ def createFormula(dataCont, design, return_nominals=False):
     # LHS (dep. variable type)
     # check to make sure the DV is not 'DONOTUSE' or a categorical
     DV = design.columns[0]
-    if DV not in dataCont.variableTypes: formula = 'standardize('+ DV +') ~ ' 
+    
+    # if do not know what type DV is, assume it's continuous
+    if DV not in dataCont.variableTypes: 
+        if standardize:
+            formula = 'standardize('+ DV +') ~ ' 
+        else: 
+            formula = DV + ' ~ '
+    
+    # if DO know what variable type DV is then...
     else:
         varType = dataCont.variableTypes[DV]
         if varType == 'DONOTUSE' and not return_nominals:
@@ -246,8 +258,11 @@ def createFormula(dataCont, design, return_nominals=False):
 #             print 'DV %s is categorical with more than 2 categories' % DV
             return None
         else:
-            formula = 'standardize('+ DV +') ~ ' 
-
+            if standardize:
+                formula = 'standardize('+ DV +') ~ ' 
+            else:
+                formula = DV + ' ~ '
+                
     # RHS (right-hand side)
     for col in design.columns[1:]: # don't include the DV in the RHS (the DV is the first element)!
  
@@ -268,8 +283,10 @@ def createFormula(dataCont, design, return_nominals=False):
                 continue
         
         # all other cases (not in dict, in dict but C or CL), treat it as continuous
-        formula += 'standardize('+ col + ', ddof=1) + ' # if it's not in dict, treat it as C
-    
+        if standardize:
+            formula += 'standardize('+ col + ', ddof=1) + ' # if it's not in dict, treat it as C
+        else:
+            formula += col + ' + ' # if it's not in dict, treat it as C
     # the last 3 characters should be ' + '
     formula = formula[:-3]
     
@@ -304,14 +321,17 @@ def matrixrank(A,tol=1e-2):
     s = np.linalg.svd(A,compute_uv=0)
     return sum( np.where( s>tol, 1, 0 ) )
 
-def runModel(dataCont, year, DV, IVs, controls=[], custom_data=None):
+def runModel(dataCont, year, DV, IVs, controls=[], custom_data=None, standardize=True):
     '''  
     inputs:
       - the year of GSS to use
       - Dependent Variable (just 1)
       - list of independent and control variables
       - custom_data = a Pandas Dataframe with a custom GSS dataset. This will be used by "run_specific_article_on_current_data" Notebook where I will provide (a subset of) the GSS data that was used in some publication
-      
+      - standardize=True: this is used for running models for the replication analysis, so that we can compare the returned 
+            coefficients to the published (unstandardized) ones. So, standardize by default (for our mini-analyses for the paper), but do not 
+            standardize for the replication analysis.        
+    
     outputs:
       if: OLS model estimation was possible, return results data structure from statsmodels OLS. 
           results contains methods like .summary() and .pvalues
@@ -379,7 +399,7 @@ def runModel(dataCont, year, DV, IVs, controls=[], custom_data=None):
         return None
 
     # create formula
-    formula = createFormula(dataCont, design)
+    formula = createFormula(dataCont, design, standardize=standardize)
     if not formula: 
         print 'Couldnt construct a suitable formula'
         return None
@@ -388,12 +408,12 @@ def runModel(dataCont, year, DV, IVs, controls=[], custom_data=None):
     try:
         results = smf.ols(formula, data=design.dropna()).fit() 
     except:
-        print 'Error running model'
+        print 'Error running model', formula
         return None
     
     # QUALITY CHECK!!!: a check on abnormal results
-    if (abs(results.params) > 10).any() or results.rsquared > 0.98:
-        print 'Either the  params or the R^2 is too high. Skipping.'
+    if (standardize and (abs(results.params) > 10).any()) or results.rsquared > 0.98:
+        print 'Either the  params or the R^2 is too high. Skipping. Formula:'
         print formula
         return None
         # raise <--- NEED TO THINK THROUGH WHAT TO DO HERE...
