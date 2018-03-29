@@ -1,9 +1,47 @@
 
 # coding: utf-8
 
-# In[12]:
+# In[1]:
 
 from __future__ import division
+import cPickle as cp
+import pandas as pd
+#import sys
+#sys.path.append('../')    
+import numpy as np
+import statsmodels.formula.api as smf 
+from scipy.stats import pearsonr, ttest_ind, ttest_rel
+import time
+from collections import Counter
+from collections import defaultdict
+from GSSUtility_old import *
+from cPickle import load, dump
+import random # note, scipy.random.choice doesn't work even though it ought to be the same function!!!
+# import rpy2.robjects as robjects
+# from rpy2.robjects import pandas2ri
+# pandas2ri.activate()
+# from rpy2.robjects import StrVector
+# import rpy2
+# import pandas.rpy.common as com
+
+
+# In[ ]:
+
+# DEFINE CONSTANTS
+
+# maximum levels a categorical variable can have. if more than this, than dropping this variable. This is to prevent
+# the use of variables that have 20-50 levels and will be estimated with each level separately, which a researcher
+# would never actually do in real life
+MAX_LEVELS_OF_CAT_VARIABLE = 15
+
+GSS_YEARS = [1972, 1973, 1974, 1975, 1976, 1977, 1978, 
+            1980, 1982, 1983, 1984, 1985, 1986, 1987, 1988, 1989, 
+            1990, 1991, 1993, 1994, 1996, 1998, 
+            2000, 2002, 2004, 2006, 2008, 2010, 
+            2012, 2014, 2016]
+
+
+# In[1]:
 
 if __name__ == '__main__':
     #########
@@ -30,12 +68,12 @@ if __name__ == '__main__':
     dump(df_vartypes.to_dict(), open(pathToData + 'variableTypes.pickle', 'wb'))
 
 
-# In[17]:
+# In[3]:
 
 # df_vartypes['PARTYID']
 
 
-# In[1]:
+# In[2]:
 
 '''
 Created on Wed Apr 02, 2014
@@ -52,35 +90,6 @@ This file contains classes and functions that are commonly used in all analyses 
 
 The classes are articleClass, dataContainer
 '''
-
-import cPickle as cp
-import pandas as pd
-#import sys
-#sys.path.append('../')    
-import numpy as np
-import statsmodels.formula.api as smf 
-from scipy.stats import pearsonr, ttest_ind, ttest_rel
-import time
-from collections import Counter
-from collections import defaultdict
-from GSSUtility import *
-from cPickle import load, dump
-import random # note, scipy.random.choice doesn't work even though it ought to be the same function!!!
-# import rpy2.robjects as robjects
-# from rpy2.robjects import pandas2ri
-# pandas2ri.activate()
-# from rpy2.robjects import StrVector
-# import rpy2
-# import pandas.rpy.common as com
-
-# DEFINE CONSTANTS
-MAX_LEVELS_OF_CAT_VARIABLE = 10
-
-GSS_YEARS = [1972, 1973, 1974, 1975, 1976, 1977, 1978, 
-            1980, 1982, 1983, 1984, 1985, 1986, 1987, 1988, 1989, 
-            1990, 1991, 1993, 1994, 1996, 1998, 
-            2000, 2002, 2004, 2006, 2008, 2010, 2012]
-
 
 class articleClass():
     # attributes
@@ -149,10 +158,10 @@ class dataContainer:
             '''
             # going to start loading 'df' via a pickle because it's 20x faster (~2 minutes)
             print 'Loading DataFrame df. This may take a few minutes.'            
-            pathToDf = '../../Data/'
-            import cPickle            
+            pathToDf = '../../Data/GSS Dataset/stata/'
 #             df = cPickle.load(open(pathToDf + 'df.pickle', 'rb'))            
-            df = pd.read_pickle(pathToDf + 'df.pickle')
+#             df = pd.read_pickle(pathToDf + 'df.pickle') # 1972-2012 version
+            df = pd.read_pickle(pathToDf + 'GSS7216_R3.cpickle') # 1972-2016 version, pickled with cPickle.dump(..., open('...', 'wb'))
             globals()['df'] = df
             self.df = df                  
         else: 
@@ -215,13 +224,12 @@ def removeConstantColumns(design):
     
     return design
     
-def createFormula(dataCont, design, return_nominals=False, standardize=True):
+def createFormula(dataCont, design, return_nominals=False):
     '''
     Takes the design matrix (where first column is DV)
     and creates a formula for Pandas/Statsmodels using the dict of variableTypes,
-    where I've coded some variables as being categorical (and specified how many levels [answer choices] they have)
-    some as continuous, and some as DONOTUSE (at the moment, 2016-07-08, I cannot remember what DONOTUSE is about.. 
-    but I think norc-coding-scheme code variable is one such DONOTUSE variable, because it's not used in the model specification in the paper, presumably)
+    where I've coded some variables as being categorical (and specified how many levels)
+    some as continuous, and some as DONOTUSE
     codes:
         C = continuous, CL = continuous-like (no difference betw. this and "C")
         number = categorical, where number is the number of levels
@@ -229,10 +237,6 @@ def createFormula(dataCont, design, return_nominals=False, standardize=True):
        
     return_nominals: default=False
         if True, returns a list of variables that are nominal (=categorical); doesn't return the formula
-        
-    standardize=True: this is used for running models for the replication analysis, so that we can compare the returned 
-        coefficients to the published (unstandardized) ones. So, standardize by default (for our mini-analyses for the paper), but do not 
-        standardize for the replication analysis.        
     '''
     
     nominals = []
@@ -240,15 +244,7 @@ def createFormula(dataCont, design, return_nominals=False, standardize=True):
     # LHS (dep. variable type)
     # check to make sure the DV is not 'DONOTUSE' or a categorical
     DV = design.columns[0]
-    
-    # if do not know what type DV is, assume it's continuous
-    if DV not in dataCont.variableTypes: 
-        if standardize:
-            formula = 'standardize('+ DV +') ~ ' 
-        else: 
-            formula = DV + ' ~ '
-    
-    # if DO know what variable type DV is then...
+    if DV not in dataCont.variableTypes: formula = 'standardize('+ DV +', ddof=1) ~ ' 
     else:
         varType = dataCont.variableTypes[DV]
         if varType == 'DONOTUSE' and not return_nominals:
@@ -258,11 +254,9 @@ def createFormula(dataCont, design, return_nominals=False, standardize=True):
 #             print 'DV %s is categorical with more than 2 categories' % DV
             return None
         else:
-            if standardize:
-                formula = 'standardize('+ DV +') ~ ' 
-            else:
-                formula = DV + ' ~ '
-                
+            formula = 'standardize('+ DV +', ddof=1) ~ ' 
+#             formula = 'standardize(' + DV + ') ~ ' 
+
     # RHS (right-hand side)
     for col in design.columns[1:]: # don't include the DV in the RHS (the DV is the first element)!
  
@@ -271,22 +265,22 @@ def createFormula(dataCont, design, return_nominals=False, standardize=True):
             varType = dataCont.variableTypes[col]        
 
             if varType == 'DONOTUSE': 
-                print 'IV %s is of type "DONOTUSE"' % col
+#                 print 'IV %s is of type "DONOTUSE"' % col
                 continue
                 
             elif type(varType) == int:
-                if varType > MAX_LEVELS_OF_CAT_VARIABLE: # A variable defined at the beginning of script that limits how many levels a categorical variable is allowed to have (some, like region, will have dozens of levels)
-                    print 'categorical variable %s has more than %d levels' % (col, MAX_LEVELS_OF_CAT_VARIABLE)
+                if varType > 15: # if >15 levels
+#                     print 'categorical variable %s has more than 15 levels' % col
+                    pass
                 else: 
                     formula += 'C('+ col + ') + '        
                     nominals.append(col)
                 continue
         
         # all other cases (not in dict, in dict but C or CL), treat it as continuous
-        if standardize:
-            formula += 'standardize('+ col + ', ddof=1) + ' # if it's not in dict, treat it as C
-        else:
-            formula += col + ' + ' # if it's not in dict, treat it as C
+        formula += 'standardize('+ col + ', ddof=1) + ' # if it's not in dict, treat it as C
+#         formula += 'standardize('+ col + ') + ' # if it's not in dict, treat it as C
+    
     # the last 3 characters should be ' + '
     formula = formula[:-3]
     
@@ -321,30 +315,23 @@ def matrixrank(A,tol=1e-2):
     s = np.linalg.svd(A,compute_uv=0)
     return sum( np.where( s>tol, 1, 0 ) )
 
-def runModel(dataCont, year, DV, IVs, controls=[], custom_data=None, standardize=True):
+def runModel(dataCont, year, DV, IVs, controls=[]):
     '''  
     inputs:
       - the year of GSS to use
       - Dependent Variable (just 1)
       - list of independent and control variables
-      - custom_data = a Pandas Dataframe with a custom GSS dataset. This will be used by "run_specific_article_on_current_data" Notebook where I will provide (a subset of) the GSS data that was used in some publication
-      - standardize=True: this is used for running models for the replication analysis, so that we can compare the returned 
-            coefficients to the published (unstandardized) ones. So, standardize by default (for our mini-analyses for the paper), but do not 
-            standardize for the replication analysis.        
-    
+      
     outputs:
       if: OLS model estimation was possible, return results data structure from statsmodels OLS. 
           results contains methods like .summary() and .pvalues
       else: return None 
     '''
-    if custom_data is None:
-        design = df.loc[year, [DV] + IVs + controls]
-    else:
-        design = custom_data.loc[year, [DV] + IVs + controls]
-        
+    design = df.loc[year, [DV] + IVs + controls]
     design = design.astype(float) # again because R messes up for ints
 #    design.index = range(len(design)) # using R for imputation messes up when the index is all the same values (year)
          
+    #IMPUTE MISSING VALUES
 #     try:
         
 #         # MI version
@@ -367,8 +354,6 @@ def runModel(dataCont, year, DV, IVs, controls=[], custom_data=None, standardize
 
     # check if we need to impute at all. if number of complete cases <= number of variables, then impute
 #     if design.dropna().shape[0] <= design.shape[1]:
-
-    # IMPUTE MISSING VALUES (in the naive way, with mode [nominal variables] and mean [continuous variables]
     nominals = createFormula(dataCont, design, return_nominals=True)
     non_nominals = list(set(design.columns) - set(nominals)) # list because sets are unhashable and cant be used for indices
     if len(non_nominals)>0: 
@@ -399,7 +384,7 @@ def runModel(dataCont, year, DV, IVs, controls=[], custom_data=None, standardize
         return None
 
     # create formula
-    formula = createFormula(dataCont, design, standardize=standardize)
+    formula = createFormula(dataCont, design)
     if not formula: 
         print 'Couldnt construct a suitable formula'
         return None
@@ -408,12 +393,12 @@ def runModel(dataCont, year, DV, IVs, controls=[], custom_data=None, standardize
     try:
         results = smf.ols(formula, data=design.dropna()).fit() 
     except:
-        print 'Error running model', formula
+        print 'Error running model'
         return None
     
     # QUALITY CHECK!!!: a check on abnormal results
-    if (standardize and (abs(results.params) > 10).any()) or results.rsquared > 0.98:
-        print 'Either the  params or the R^2 is too high. Skipping. Formula:'
+    if (abs(results.params) > 10).any() or results.rsquared > 0.98:
+        print 'Either the  params or the R^2 is too high. Skipping.'
         print formula
         return None
         # raise <--- NEED TO THINK THROUGH WHAT TO DO HERE...

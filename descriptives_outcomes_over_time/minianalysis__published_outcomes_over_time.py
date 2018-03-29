@@ -1,21 +1,20 @@
-# -*- coding: utf-8 -*-
-# <nbformat>3.0</nbformat>
 
-# <markdowncell>
+# coding: utf-8
 
 # #minianalysis__published_outcomes_over_time
 # 
 # 
 # 
 # description: 
-#     
+#     Not sure what this is. Just for descriptive purposes perhaps?
 # inputs:
 # 
 # outputs:
 # 
 # @author: Misha
+# 
 
-# <codecell>
+# In[ ]:
 
 import sys
 sys.path.append('../')
@@ -28,7 +27,8 @@ import seaborn
 
 import statsmodels.formula.api as smf
 
-# <codecell>
+
+# In[ ]:
 
 #*********************************************************
 allPropsForYearsUsed = []
@@ -49,8 +49,7 @@ if __name__ == "__main__":
 #     raw_input('...')
 
     YEARS = range(1972, 2013)
-    outcomes = ['propSig', 'paramSizesNormed', 'Rs', 'adjRs', 'pvalues', \
-                'propSig_CentralVars', 'paramSizesNormed_CentralVars', 'pvalues_CentralVars']
+    outcomes = ['propSig', 'paramSizesNormed', 'Rs', 'adjRs', 'pvalues',                 'propSig_CentralVars', 'paramSizesNormed_CentralVars', 'pvalues_CentralVars']
     output = pd.DataFrame(np.empty((len(YEARS), len(outcomes))), columns=outcomes, index=YEARS)    
     output = output.astype(object)
     for row in output.iterrows():
@@ -99,25 +98,23 @@ if __name__ == "__main__":
                 output.loc[article.yearPublished]['pvalues'].append(np.mean( res.pvalues[1:]))            
                 if len(centralVars) > 0:            
                     output.loc[article.yearPublished]['pvalues_CentralVars'].append(np.mean(res.pvalues[centralVars]))               
-                    output.loc[article.yearPublished]['propSig_CentralVars'].append(float(len([p for p in res.pvalues[centralVars] if p < 0.05])) \
-                                                            /len(res.params[centralVars])) 
+                    output.loc[article.yearPublished]['propSig_CentralVars'].append(float(len([p for p in res.pvalues[centralVars] if p < 0.05]))                                                             /len(res.params[centralVars])) 
                     output.loc[article.yearPublished]['paramSizesNormed_CentralVars'].append(np.mean(res.params[centralVars].abs()))                
             
 #     cp.dump(output, open('outputFromOutcomesOverTime.pickle', 'wb'))
 
-# <codecell>
+
+# In[6]:
 
 output
 
-# <markdowncell>
 
 # #Plot outcomes
 
-# <codecell>
+# In[9]:
 
 import cPicle as cp
-outcomes = ['propSig', 'paramSizesNormed', 'Rs', 'adjRs', 'pvalues', \
-            'propSig_CentralVars', 'paramSizesNormed_CentralVars', 'pvalues_CentralVars']
+outcomes = ['propSig', 'paramSizesNormed', 'Rs', 'adjRs', 'pvalues',             'propSig_CentralVars', 'paramSizesNormed_CentralVars', 'pvalues_CentralVars']
 # pathToData = 'C:\Users\Misha\Dropbox\GSS Project\gss_code/minianalysis_outcomes_over_time/'
 output = cp.load(open('outputFromOutcomesOverTimeFromRandomVariables.pickle'))
 
@@ -175,6 +172,8 @@ for outcome in output:
     print 'intercept:'+str(result.params[0])+', '+str(result.pvalues[0])
     show()
 
-# <codecell>
+
+# In[ ]:
+
 
 

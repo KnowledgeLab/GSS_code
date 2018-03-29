@@ -1,7 +1,8 @@
 
 # coding: utf-8
 
-# In[2]:
+# In[1]:
+
 
 # filename: minianalysis__cognate_variables.py
 # 
@@ -12,7 +13,7 @@
 # 
 # outputs:
 # 
-# @author: Misha
+# @author: Misha Teplitskiy, mishateplitskiy@gmail.com
 # 
 
 from __future__ import division
@@ -27,6 +28,7 @@ sys.path.append('../')
 import GSSUtility as GU
 
 import numpy as np
+from numpy import nan
 import statsmodels.formula.api as smf 
 import random
 from scipy.stats import pearsonr, ttest_ind, ttest_rel
@@ -43,11 +45,13 @@ sb.set_style("darkgrid", rc=custom_style)
 
 # In[ ]:
 
-get_ipython().magic(u'rm ../GSSUtility.pyc # remove this file because otherwise it will be used instead of the updated .py file')
+
+# %rm ../GSSUtility.pyc # remove this file because otherwise it will be used instead of the updated .py file
 reload(GU)
 
 
 # In[ ]:
+
 
 if __name__ == "__main__":    
 
@@ -78,7 +82,7 @@ if __name__ == "__main__":
             output[group][outcome] = []
             
     
-    articlesToUse = GU.filterArticles(dataCont.articleClasses, GSSYearsUsed=True, GSSYearsPossible=False,                                       centralIVs=True, linearModels=False) 
+    articlesToUse = GU.filterArticles(dataCont.articleClasses, GSSYearsUsed=True, GSSYearsPossible=False,                                       centralIVs=True, linearModels=True) 
     
     print 'Articles to use:', len(articlesToUse)
 
@@ -182,88 +186,32 @@ if __name__ == "__main__":
                         output[groups[i]]['propSig_CentralVars'].append(nan) 
                         output[groups[i]]['paramSizesNormed_CentralVars'].append(nan)                
                 
-                output['metadata']['article_id'].append(article.articleID)    
-
-pickle.dump(output, open('output.pickle', 'w'))
-# ########################################################################################                
-# ## this is the old ways of saving results.. now i'm doing it the way "models_on_next_year" does it
-    
-#                 for i in range(2):
-#                     # save the results                   
-#                     td[groups[i]]['Rs'].append(results[i].rsquared)
-#                     td[groups[i]]['adjRs'].append(results[i].rsquared_adj)
-#                     td[groups[i]]['numTotal'] += len(results[i].params[1:])
-#                     td[groups[i]]['numSig'] += float(len([p for p in results[i].pvalues[1:] if p < 0.05])) # start at 1 because don't want to count the constant
-#                     td[groups[i]]['paramSizesNormed'].append(abs(results[i].params[-1])) # get the absolute value of the standardized coefficients and take the mean 
-#                     td[groups[i]]['pvalues'].append(results[i].pvalues[-1])
-               
-#                     td[groups[i]]['pvalues_CentralVars'].append(np.mean(results[i].pvalues[centralVars]))               
-#                     td[groups[i]]['propSig_CentralVars'].append(float(len([p for p in results[i].pvalues[centralVars] if p < 0.05])) \
-#                                                             /len(results[i].params[centralVars])) 
-#                     td[groups[i]]['paramSizesNormed_CentralVars'].append(np.mean(results[i].params[centralVars].abs()))                
-
+                output['metadata']['article_id'].append(article.articleID)  
                 
+    print '\n\n============================================\nFINISHED RUNNING MODELS'
 
-# # # #                 print >> tempCognateOutput, 'Orig:\t', cIV, '\t\tCogn:\t', cognate, '\t\t Coeffs:\t', results.params[-1], results.pvalues[-1],resultsCognate.params[-1], resultsCognate.pvalues[-1] 
-            
-            
-            
-#             # The change I'm making is that the block below is now within the for loop
-#             # of "for DV in article.DVs". So I'm averaging over years but not DVs   
-            
-#             # if an article's model isn't run on both group 1 and group 2, skip it        
-#             if td[group1]['numTotal'] == 0 or td[group2]['numTotal'] == 0: continue
-          
-#             variableCognateTuples.append((cIV, cognate))
-#             for group in groups:      
-#                 output[group]['Rs'].append( np.mean(td[group]['Rs'])) 
-#                 output[group]['adjRs'].append(np.mean( td[group]['adjRs'])) 
-#                 output[group]['propSig'].append( td[group]['numSig']/td[group]['numTotal']) 
-#                 output[group]['paramSizesNormed'].append(np.mean( td[group]['paramSizesNormed'])) 
-#                 output[group]['pvalues'].append(np.mean( td[group]['pvalues']))
-#                 output[group]['numTotal'].append(td[group]['numTotal'] / len(td[group]['Rs'])) #divide by len of R^2 array to get a mean of variables estimated PER model                           
-
-#                 output[group]['pvalues_CentralVars'].append(np.mean(td[group]['pvalues_CentralVars']))               
-#                 output[group]['propSig_CentralVars'].append(np.mean(td[group]['propSig_CentralVars'])) 
-#                 output[group]['paramSizesNormed_CentralVars'].append(np.mean(td[group]['paramSizesNormed_CentralVars']))                
-
-#             output['metadata']['article_id'].append(article.articleID)   
-        
+# I dump the file here, because this allows me to run this script as a standalone .py file in command line...
+# it saves the output fine, and then crashes (intentionally) when it gets to the viz part further below
+pickle.dump(output, open('output.pickle', 'w'))
 
 
-#     print 'TTests'
-#     for outcome in outcomes:
-#         print 'Means of group1 and group2:', np.mean(output[group1][outcome]), np.mean(output[group2][outcome]), 'Paired T-test of ' + outcome, ttest_rel(output[group1][outcome], output[group2][outcome])
+# # Break
+# This and the following cells are designed to do an intermediate output --> input step, so that I can run this script WITHOUT graphics (command line), and then just come to this notebook to VISUALIZE the results
 
-#     tempCognateOutput.close()    
-
-# <markdowncell>
-
-# Create a Pandas DataFrame of the output
-# --
+# In[7]:
 
 
-# In[ ]:
-
-# import pickle
-# group1 = 'original model'
-# group2 = 'cognate model'   
-# groups = [group1, group2]
-# outcomes = ['propSig', 'paramSizesNormed', 'Rs', 'adjRs', 'pvalues',  'numTotal', \
-#             'propSig_CentralVars', 'paramSizesNormed_CentralVars', 'pvalues_CentralVars']
-
-
-
-# In[3]:
-
+# load the output pickle after running models
 output = pickle.load(open('output.pickle'))
+
+
+# In[8]:
+
+
 group1 = 'original model'
 group2 = 'cognate model'   
 groups = [group1, group2]
 outcomes = ['propSig', 'paramSizesNormed', 'Rs', 'adjRs', 'pvalues',  'numTotal',             'propSig_CentralVars', 'paramSizesNormed_CentralVars', 'pvalues_CentralVars']
-
-
-# In[4]:
 
 df_output = pd.DataFrame(index=np.arange(len(output[group1]['propSig'])), columns=pd.MultiIndex.from_product([groups, outcomes]))
 df_output.columns.names = ['outcome','group']
@@ -273,24 +221,28 @@ for outcome in outcomes:
 df_output.index = output['metadata']['article_id']
 del df_output[group1, 'numTotal']
 del df_output[group2, 'numTotal']
+
 print 'Using %f models from %f articles' % (len(df_output), len(df_output.index.unique()))
-# df_output.to_pickle('df_output.pickle')
 
 
-# In[7]:
+# In[9]:
+
 
 # output article IDs for use in replication project. 2016-06-07
+'''
 fout = open('minianalysis_cognate_variables_list_of_articles_used.csv',  'wb')
 fout.write(','.join(map(str, sorted(df_output.index.unique())))) # unique article IDs used, separated by commas
 fout.close()
+'''
 
 
-# In[22]:
+# ## The part below is where running command-line script should crash
+
+# In[10]:
+
 
 get_ipython().magic(u'matplotlib inline')
 # #Plot outcomes - (new) distribution of differences approach
-# df_output = pd.read_pickle('df_output.pickle')
-# <codecell>
 
 outcomeMap = {'propSig':"% of Stat. Sign. Coeff's", 
               'paramSizesNormed':"Standard. Size of Coeff's",
@@ -335,13 +287,14 @@ for outcome in outcomes:
                 color='black', legend=False, shade=True)
     plt.plot([0,0], [0,outcomeYlimits[outcome]], '--', color='black', linewidth=2)
     
-    plt.savefig('images/cognate-differences--' + outcome + '.png', bbox_inches='tight')
+#     plt.savefig('images/cognate-differences--' + outcome + '.png', bbox_inches='tight')
 #     break
 
 # <markdowncell>
 
 
-# In[82]:
+# In[6]:
+
 
 # ONE EXAMPLE OF DIFFERENCES IN DISTRIBUTION: PROP OF STAT. SIGN. EFFECTS FOR CENTRAL VARS
 plt.figure(figsize=(8,6))
@@ -356,10 +309,11 @@ plt.ylabel('Density', fontsize=15)
 plt.xlim(0, 1)
 plt.xticks(fontsize=15)
 plt.yticks(fontsize=15)
-plt.savefig('images/cognate-example-of-differences-in-distributions-prop-sign-of-central-effects.png', bbox_inches='tight', dpi=150)
+# plt.savefig('images/cognate-example-of-differences-in-distributions-prop-sign-of-central-effects.png', bbox_inches='tight', dpi=150)
 
 
-# In[10]:
+# In[ ]:
+
 
 # # #Plot outcomes - (old) bar chart approach
 # %matplotlib inline
@@ -419,7 +373,8 @@ plt.savefig('images/cognate-example-of-differences-in-distributions-prop-sign-of
 # # <markdowncell>
 
 
-# In[23]:
+# In[ ]:
+
 
 # #temp fix to convert proportions into percentages
 # for group in [group1, group2]:
@@ -427,7 +382,8 @@ plt.savefig('images/cognate-example-of-differences-in-distributions-prop-sign-of
 #         df_output[group, o] = df_output[group, o]/100
 
 
-# In[92]:
+# In[11]:
+
 
 get_ipython().magic(u'matplotlib inline')
 
@@ -515,16 +471,18 @@ plt.xlim(-32,6)
 
 # plt.plot([0,0], [-0.5,7.5], linewidth=2, c='black', alpha=.75)
 
-plt.savefig('images/cognate--original-minus-perturbed.png', bbox_inches='tight', dpi=150)
+# plt.savefig('images/cognate--original-minus-perturbed.png', bbox_inches='tight', dpi=150)
 
 
-# In[60]:
+# In[ ]:
+
 
 # box = rects[0].get_bbox()
 # box.
 
 
-# In[124]:
+# In[ ]:
+
 
 # Perform t-tests and Tests using *clustered errors*
 # --
@@ -617,13 +575,15 @@ print 'total:', df_output.shape[0]
 print 'percent:', df_output[group2, 'pvalues'][df_output[group2, 'pvalues'] > 0.05].shape[0]/ df_output.shape[0]
 
 
-# In[133]:
+# In[ ]:
+
 
 print outcome
 print result_clustered.HC0_se
 
 
 # In[ ]:
+
 
 
 
