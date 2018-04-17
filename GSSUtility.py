@@ -93,6 +93,8 @@ The classes are articleClass, dataContainer
 
 class articleClass():
     # attributes
+#     title = None  <--- this and the one below would be nice to add at some point.... create_articleClasses uses this...
+#     publication_title = None
     articleID = None
     IVs = []
     DV = []
@@ -161,7 +163,11 @@ class dataContainer:
             pathToDf = '../../Data/GSS Dataset/stata/'
 #             df = cPickle.load(open(pathToDf + 'df.pickle', 'rb'))            
 #             df = pd.read_pickle(pathToDf + 'df.pickle') # 1972-2012 version
-            df = pd.read_pickle(pathToDf + 'GSS7216_R3.cpickle') # 1972-2016 version, pickled with cPickle.dump(..., open('...', 'wb'))
+
+            # 1972-2016 version, pickled with cPickle.dump(..., open('...', 'wb'))
+            # this cPickle file is created with the script UTILITY_random_tasks.ipynb
+            # i believe the various types of missing values are automatically recoded as NA
+            df = pd.read_pickle(pathToDf + 'GSS7216_R3.cpickle') 
             globals()['df'] = df
             self.df = df                  
         else: 
@@ -315,10 +321,10 @@ def matrixrank(A,tol=1e-2):
     s = np.linalg.svd(A,compute_uv=0)
     return sum( np.where( s>tol, 1, 0 ) )
 
-def runModel(dataCont, year, DV, IVs, controls=[]):
+def runModel(dataCont, years, DV, IVs, controls=[]):
     '''  
     inputs:
-      - the year of GSS to use
+      - years: the year(s) of GSS to use. Year can be singuar or an array of integers (as for Cognate mini-anaysis) 
       - Dependent Variable (just 1)
       - list of independent and control variables
       
@@ -327,7 +333,7 @@ def runModel(dataCont, year, DV, IVs, controls=[]):
           results contains methods like .summary() and .pvalues
       else: return None 
     '''
-    design = df.loc[year, [DV] + IVs + controls]
+    design = df.loc[years, [DV] + IVs + controls].copy() # don't think I need copy() but just in case
     design = design.astype(float) # again because R messes up for ints
 #    design.index = range(len(design)) # using R for imputation messes up when the index is all the same values (year)
          
@@ -413,7 +419,7 @@ def runModel(dataCont, year, DV, IVs, controls=[]):
 
 
 '''
-description: This module contains a functil filterArticleClasses which goes through the 
+description: This module contains a function filterArticleClasses which goes through the 
   articleClasses.pickle (list of Classes) created by create_articleClasses and filters that list 
   further according to specified criteria (central variables, etc.)
   It is to be used to set up the data, before running the actual models.
@@ -503,7 +509,7 @@ def filterArticles(articleClasses, GSSYearsUsed=True, GSSYearsPossible=False, un
 def identifyCognates(dataCont, LHS, cIVs, GSSYearsUsed, corrThreshold):
     '''
     This function takes as input the variables the articles uses on the LHS, identifies suitable
-    cognate variables and returns one of them, along with the suitable GSS years that have that cognate.
+    cognate variables and returns one of them (chosen at random), along with the suitable GSS years that have that cognate.
     GSS years to use are that subset of GSSYearsUsed which also contain the cognate
     
     inputs:
