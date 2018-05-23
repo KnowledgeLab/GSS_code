@@ -220,13 +220,15 @@ def removeConstantColumns(design):
     input: dataframe
     returns: dataframe without any constant columns; if DV is constant returns None
     '''
-    if len(design.ix[:,0].unique()) == 1: return None # if DV constant
+    if len(design.iloc[:,0].unique()) == 1: 
+#         print 'design.iloc[:,0].unique() == 1\n', design.iloc[:,0].head()
+        print 'DV is constant'
+        return None 
     for col in design:
         if len(design[col].unique()) == 1 or np.all(design[col].isnull()): # if any IVs or controls constant, drop 'em
             print 'Dropping column', col, 'because it is constant'                    
             #raw_input('asdfa')            
             design = design.drop(col, axis=1) # inplace=True option not available because i'm using an old Pandas package?
-#             print design.columns
     
     return design
     
@@ -359,20 +361,29 @@ def runModel(dataCont, years, DV, IVs, controls=[]):
 #         print year, DV, IVs
 
     # check if we need to impute at all. if number of complete cases <= number of variables, then impute
-#     if design.dropna().shape[0] <= design.shape[1]:
-    nominals = createFormula(dataCont, design, return_nominals=True)
-    non_nominals = list(set(design.columns) - set(nominals)) # list because sets are unhashable and cant be used for indices
-    if len(non_nominals)>0: 
-        design[non_nominals] = design[non_nominals].fillna(design[non_nominals].mean()) # the naive way
-    if len(nominals)>0:
-        design[nominals] = design[nominals].fillna(design[nominals].mode())
+    nominals, non_nominals = [], [] 
+    if design.dropna().shape[0] <= design.shape[1]:
+        nominals = createFormula(dataCont, design, return_nominals=True)
+        non_nominals = list(set(design.columns[1:]) - set(nominals)) # list because sets are unhashable and cant be used for indices and [1:] because we don't want to impute the DV
+#     if len(non_nominals)>0: 
+#         design[non_nominals] = design[non_nominals].fillna(design[non_nominals].mean()) # the naive way
+#     if len(nominals)>0:
+#         design[nominals] = design[nominals].fillna(design[nominals].mode().iloc[0]) # iloc because https://stackoverflow.com/questions/42789324/pandas-fillna-mode
+#     print '# cols before dropna(thresh(10%)):', len(design.columns)
 
+    # DROP COLUMNS WITH PARTICULAR FRACTION OF MISSING VALUES
+#     design = design.dropna(axis=1, thresh=int(0.15*len(design)))
+
+#     print '# cols design AFTER dropna(thresh(10%)):', len(design.columns)
     # constant columns happen somewhat often, e.g. a variable like religous is always == 1 if the study also uses a varaiable
     # like denom == the specific denomination
+    print '# rows before dropna():', len(design)
     design = removeConstantColumns(design.dropna()) 
+    if not design is None: print '# rows after dropna():', len(design)
   
     # if the line above removed DV column, then can't use this model, return None
-    if design is None or DV not in design: 
+    if design is None or DV not in design:
+#         print design
         print 'design is None or DV not in design'
         return None    
 
